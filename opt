@@ -1,0 +1,116 @@
+using JuMP
+using Ipopt
+using LinearAlgebra
+using Plots
+include("jac.jl")
+
+######## GLOBAL PARAMETERS ########
+epsilon = 1e-1
+######## GLOBAL PARAMETERS ########
+
+############ FUNCTIONS ############
+
+function gen_fin_diff(n, number)
+    @assert number <= n-1
+    tmp = zeros(1, n)
+    tmp[number]     = -1.0
+    tmp[number + 1] = +1.0
+    return tmp
+end
+
+function get_A_block(I)
+    ### In a A_block ###
+    # A ∈ I-1 x I
+    ### In a A_block ###
+    A_block = gen_fin_diff(I, 1)
+    for i=2:(I-1)
+        A_block = [A_block; gen_fin_diff(I, i)]
+    end
+    return A_block
+end
+
+function get_A_proj(I, M)
+    ### In total A_proj ###
+    # (I-1) * M -- num of rows
+    # I * M -- num of cols
+    ### In total A_proj ###
+
+    ### In a A_block ###
+    # A ∈ I-1 x I
+    ### In a A_block ###
+
+    A_proj = zeros((I-1) * M, I * M)
+    for i=0:(M-1)
+        A_block = get_A_block(I)
+        #print(i)
+        #print(i*(I-1)+1)
+        #print((i+1)*(I-1))
+        #print("___")
+        A_proj[i*(I-1)+1:(i+1)*(I-1), 1+I*i:I*(i+1)] = A_block
+    end
+
+    return A_proj
+
+end
+
+############ FUNCTIONS ############
+
+#d = reshape([[0.0, 0.0, 1.0];[0.0, 0.0, 0.0];[0.0, 0.0, 0.0]], 3, 3)
+d_min_p = []
+p_min_p = []
+ps      = []
+#p_prev = reshape([[0.0, 0.0, 1.0];[0.0, 0.0, 0.0];[0.0, 0.0, 0.0]], 3, 3)
+for iter=1:5000
+    if iter == 1
+        d = reshape([[1.0, 1.0, 1.0];[1.0, 1.0, 1.0];[1.0, 1.0, 1.0]], 3, 3)
+        p_prev = reshape([[0.0, 0.0, 1.0];[0.0, 0.0, 0.0];[0.0, 0.0, 0.0]], 3, 3)
+    end
+    model = Model(with_optimizer(Ipopt.Optimizer))
+    @variable(model, Q[i=1:2, m=1:3], start=sqrt(3)/3 * i * m)
+    @variable(model, p[i=1:3, m=1:3], start=sqrt(3)/3 * i * m)
+    A  = transpose(reshape([[-1.0; 0.0]; [1.0; -1.0]; [0.0, 1.0]], 2, 3))
+
+    global d  = d -  (1/100)*(d - reshape(p_prev, 3, 3).^2)
+    #global d  =  reshape(p_prev, 3, 3).^2
+
+    @constraint(model, pdes[i=2,m=1:2], (Q[i,m] - Q[i-1,m]) + (p[i,m+1] - p[i,m]) == 0.0)
+
+
+
+    obj2 = sum((A' * d[:,m])' * Q[:,m] for m=1:3)
+    @variable(model, aux)
+
+    @constraint(model, aux == obj2)
+    #@constraint(model, press_bnds[i=1:3, m=1:3], 0.69 <= p[i,m] <= 0.7)
+    @NLobjective(model, Min, (1. / 3.)*sum(sqrt(Q[i,m]^6) for i=1:2, m=1:3) -  aux)
+
+    optimize!(model)
+
+    push!(p_min_p, norm(value.(p) - p_prev))
+    global p_prev = value.(p)
+    global dual_prev = zeros(1,2)
+    dual_prev[1,1] = dual(pdes[2,1])
+    dual_prev[1,2] = dual(pdes[2,2])
+    global dual_prev_pb = zeros(3,3)
+    #=for i=1:3
+        for j=1:3
+            dual_prev_pb[i,j] = dual(press_bnds[i,j])
+        end
+    end=#
+
+
+    #println("dual(pdes[2,1]) = ", dual(pdes[2,1]))
+    #println("dual(pdes[2,2]) = ", dual(pdes[2,2]))
+
+    push!(d_min_p, log(10, norm(d - p_prev.^2)))
+    push!(ps, p_prev)
+
+    #println("obj = ", objective_value(model))
+    println("|| d - p || = ", d_min_p[length(d_min_p)])
+    println("|| p_prev - p || = ", p_min_p[length(p_min_p)])
+end
+#length(d_min_p)
+plot(Array(1:length(d_min_p)), d_min_p, seriestype=:scatter,
+         xlabel = "Iteration Number", ylabel="log||d - p^2||")
+#savefig("plot_success_log_5000.png")
+#scatter(Array(1:length(d_min_p)), d_min_p)

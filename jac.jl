@@ -11,8 +11,8 @@ eps_t = 1e-3
 eps_x = 1e-1
 epsilon = eps_t / eps_x
 alpha = 8.57
-I_ = 20
-M = 40
+I_ = 5
+M = 80
 p_1 = zeros(I_)
 for i=1:I_
         p_1[i] = i
@@ -40,17 +40,15 @@ function solve_opt!(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p
     #println("forming constraints...")
     @constraint(model, pdes[i=2:I_,m=1:(M-1)], (Q[i, m] - Q[i-1, m]) / epsilon_x + (p[i,m+1] - p[i,m]) / epsilon_t == 0.0)
 
-    #println("fuck")
-    #println(typeof((A' * d[:,1])'))
-    #println("cock")
+
     obj2 = sum((A' * d[:,m])' * Q[2:I_,m] for m=1:M)
 
     @variable(model, aux)
 
     @constraint(model, aux == obj2)
-    @constraint(model, feeez[idx=2:(I_)], p[idx,1] == sqrt(init_value_p_2[idx, 1]))
+    @constraint(model, feeez[idx=1:(I_)], p[idx,1] == sqrt(init_value_p_2[idx, 1]))
 
-    @constraint(model, feeez_Q[idx=1:(M)], Q[1,idx] == sqrt(abs(a) / alpha))
+    @constraint(model, feeez_Q[idx=1:(M)], Q[1,idx] == init_value_Q[1, idx])
 
 
     #println("forming objective...")

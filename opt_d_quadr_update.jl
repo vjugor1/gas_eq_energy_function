@@ -13,8 +13,8 @@ epsilon_x = 1e-1
 step = 1/10.
 #c_s = 300
 alpha = 8.57
-I_ = 20
-M = 40
+I_ = 5
+M = 80
 ######## GLOBAL PARAMETERS ########
 
 
@@ -110,12 +110,12 @@ savefig("plot_p_x_T.png")
 plot(Array(1:I_) * epsilon_x, p_prev[:, 1],
          xlabel = "x", ylabel="p(x, 0)")
 savefig("plot_p_x_0.png")
-plot(Array(1:I_) * epsilon_x, Q_prev[:, 1],
+plot(Array(1:I_) * epsilon_x, round.(Q_prev[:, 1], digits=5),
          xlabel = "x", ylabel="Q(x, 0)")
 savefig("plot_Q_x_0.png")
 
 
-plot(Array(1:(I_)) * epsilon_x, Q_prev[:, M],
+plot(Array(1:(I_)) * epsilon_x, round.(Q_prev[:, M], digits=5),
                 xlabel = "x", ylabel="Q(x, T)")
 savefig("plot_Q_x_T.png")
 
@@ -123,7 +123,7 @@ plot(Array(1:M) * epsilon_t, p_prev[1, :],
                 xlabel = "t", ylabel="p(0, t)")
 savefig("plot_p_0_t.png")
 
-plot(Array(1:M) * epsilon_t, p_prev[I_, :],
+plot(Array(1:M) * epsilon_t, round.(p_prev[I_, :], digits=5),
                 xlabel = "t", ylabel="p(L, t)")
 savefig("plot_p_L_t.png")
 
@@ -131,7 +131,18 @@ for i=1:(trunc(Int, M / 10))
     plot(Array(1:I_) * epsilon_x, p_prev[:, (i * 10)],
                     xlabel = "x", ylabel=string("p(x,", string(i*10), ")"))
     savefig(string("plot_p_x_", string(i*10*epsilon_t), ".png"))
+    plot(Array(1:I_) * epsilon_x, Q_prev[:, (i * 10)],
+                    xlabel = "x", ylabel=string("Q(x,", string(i*10), ")"))
+    savefig(string("plot_Q_x_", string(i*10*epsilon_t), ".png"))
 end
+#
 
 
 #scatter(Array(1:length(d_min_p)), d_min_p)
+using JLD
+save("Q_prev.jld", "Q_prev", Q_prev)
+save("p_prev.jld", "p_prev", p_prev)
+save("ds.jld", "ds", ds)
+save("ps.jld", "ps", ps)
+save("Qs.jld", "Qs", Qs)
+save("criterions.jld", "criterions", criterions)

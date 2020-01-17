@@ -32,7 +32,7 @@ function left_bound_Q_lin_inc(x)
     return sqrt(abs(a) / alpha) * (1 + x * 10)
 end
 function left_bound_Q_const(x)
-    return sqrt(abs(a) / alpha)
+    return sqrt(abs(a) / alpha) * 2
 end
 
 
@@ -68,8 +68,8 @@ function set_init_pressure!(init_, foo, lb_foo, rb_foo)
 end
 
 function set_lb_Q!(init_, foo)
-    I__ = size(init_)[1]
-    init_[:,1] = foo.(collect(1:I__) * epsilon_x)
+    M_ = size(init_)[2]
+    init_[1,:] = foo.(collect(1:M_) * epsilon_t)
 end
 
 function get_init_p_Q(I_, M, lb_foo_p, rb_foo_p, init_foo_p, lb_foo_Q, rnd_seed)
@@ -79,7 +79,7 @@ function get_init_p_Q(I_, M, lb_foo_p, rb_foo_p, init_foo_p, lb_foo_Q, rnd_seed)
     set_rb_pressure!(init_value_p_2, rb_foo_p)
     set_init_pressure!(init_value_p_2, init_foo_p, lb_foo_p, rb_foo_p)
     init_value_Q = ones(I_,M) * sqrt(abs(a) / alpha) # / alpha * epsilon_x
-    set_lb_Q!(init_value_Q[:, 1], lb_foo_Q)
+    set_lb_Q!(init_value_Q, lb_foo_Q)
     return (init_value_p_2, init_value_Q)
 end
 

@@ -7,12 +7,12 @@ using Plots
 
 
 ######## GLOBAL PARAMETERS ########
-eps_t = 1e-3
-eps_x = 1e-1
-epsilon = eps_t / eps_x
+epsilon_t = 1e-3
+epsilon_x = 1e-1
+epsilon = epsilon_t / epsilon_x
 alpha = 8.57
 I_ = 5
-M = 80
+M = 20
 p_1 = zeros(I_)
 for i=1:I_
         p_1[i] = i
@@ -24,6 +24,7 @@ end
 
 
 function solve_opt!(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out, d, out)
+    #In-place type
     model = Model(with_optimizer(Ipopt.Optimizer, print_level=0))
     @variable(model, Q[i=1:I_, m=1:M], start=init_value_Q[i, m] )
     @variable(model, p[i=1:I_, m=1:M], start=sqrt(init_value_p_2[i,m]))
@@ -33,24 +34,16 @@ function solve_opt!(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p
     #if iter > 1
     #    global d  = d - step* (d - reshape(p_prev, I_, M).^2)
     #end
-
     #println("gradient step done")
-
     #global d  =  reshape(p_prev, 3, 3).^2
     #println("forming constraints...")
-    @constraint(model, pdes[i=2:I_,m=1:(M-1)], (Q[i, m] - Q[i-1, m]) / epsilon_x + (p[i,m+1] - p[i,m]) / epsilon_t == 0.0)
-
 
     obj2 = sum((A' * d[:,m])' * Q[2:I_,m] for m=1:M)
-
     @variable(model, aux)
-
     @constraint(model, aux == obj2)
     @constraint(model, feeez[idx=1:(I_)], p[idx,1] == sqrt(init_value_p_2[idx, 1]))
-
     @constraint(model, feeez_Q[idx=1:(M)], Q[1,idx] == init_value_Q[1, idx])
-
-
+    @constraint(model, pdes[i=2:I_,m=1:(M-1)], (Q[i, m] - Q[i-1, m]) / epsilon_x + (p[i,m+1] - p[i,m]) / epsilon_t == 0.0)
     #println("forming objective...")
     @NLobjective(model, Min, alpha * (epsilon_x / 3.)*sum(sqrt(Q[i,m]^6) for i=1:I_, m=1:M) -  aux)
     #println("forming objective...done")
@@ -69,7 +62,125 @@ function solve_opt!(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p
     end
 end
 
+function solve_opt(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out, d)
+    #Out-of-place type
+    model = Model(with_optimizer(Ipopt.Optimizer, print_level=0))
+    @variable(model, Q[i=1:I_, m=1:M], start=init_value_Q[i, m] )
+    @variable(model, p[i=1:I_, m=1:M], start=sqrt(init_value_p_2[i,m]))
+    if size(d) != (I_, M)
+        d = reshape(d, I_, M)
+    end
+    #if iter > 1
+    #    global d  = d - step* (d - reshape(p_prev, I_, M).^2)
+    #end
+    #println("gradient step done")
+    #global d  =  reshape(p_prev, 3, 3).^2
+    #println("forming constraints...")
 
+    obj2 = sum((A' * d[:,m])' * Q[2:I_,m] for m=1:M)
+    @variable(model, aux)
+    @constraint(model, aux == obj2)
+    @constraint(model, feeez[idx=1:(I_)], p[idx,1] == sqrt(init_value_p_2[idx, 1]))
+    @constraint(model, feeez_Q[idx=1:(M)], Q[1,idx] == init_value_Q[1, idx])
+    @constraint(model, pdes[i=2:I_,m=1:(M-1)], (Q[i, m] - Q[i-1, m]) / epsilon_x + (p[i,m+1] - p[i,m]) / epsilon_t == 0.0)
+    #println("forming objective...")
+    @NLobjective(model, Min, alpha * (epsilon_x / 3.)*sum(sqrt(Q[i,m]^6) for i=1:I_, m=1:M) -  aux)
+    #println("forming objective...done")
+    #println("optimize...")
+    optimize!(model)
+    #println("optimize...done")
+    p_out = value.(p)
+    Q_out = value.(Q)
+    if p_Q_out == true
+        return (p_out, Q_out)
+    else
+        return p_out.^2
+    end
+end
+
+function f_d!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
+    #out of place
+    p = sqrt.(copy(init_value_p_2))
+    Q = copy(init_value_Q)
+    for i=2:I_
+        for m=1:M
+            Q[i,m] = sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha) ) * ((d[i,m] - d[i-1,m]) / abs(d[i,m] - d[i-1,m]))
+        end
+    end
+
+    for i=2:I_
+        for m=2:M
+            p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( Q[i,m_] - Q[i-1,m_] for m_=1:(m-1))
+        end
+    end
+    if p_Q_out == false
+        out[:] = p.^2
+        nothing
+    else
+        out[1] = p
+        out[2] = Q
+        nothing
+    end
+end
+
+function f_d(d, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
+    #in place
+    p = sqrt.(copy(init_value_p_2))
+    Q = copy(init_value_Q)
+    for i=2:I_
+        for m=1:M
+            Q[i,m] = sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha) ) * ((d[i,m] - d[i-1,m]) / abs(d[i,m] - d[i-1,m]))
+        end
+    end
+
+    for i=2:I_
+        for m=2:M
+            p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( Q[i,m_] - Q[i-1,m_] for m_=1:(m-1))
+        end
+    end
+    if p_Q_out == false
+        return p.^2
+    else
+        return (p, Q)
+    end
+end
+
+function f_d_e(d, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
+    #in place
+    #p = similar(d)
+    d  = reshape(d, I_, M)
+    p  = Array{Any, 2}(undef, I_, M)
+    #println("kkk")
+    #p[1,1] = d[1,1] - init_value_p_2[1,1]
+    #println("kkk")
+    #initial condition p
+    for i=1:I_
+        p[i,1] = d[i,1] - d[i,1] + sqrt(init_value_p_2[i,1])
+    end
+
+    #left bound p
+
+    for m=1:M
+        p[1,m] = d[1,m] - d[1,m] + sqrt(init_value_p_2[1,m])
+    end
+    #with initial Q
+    for m=2:M
+        p[2,m] = sqrt(init_value_p_2[2,1]) - (epsilon_t) / (epsilon_x) * sum( sqrt( abs(d[2,m_] - d[1,m_]) / (epsilon_x * alpha) ) * ((d[2,m_] - d[1,m_]) / abs(d[2,m_] - d[1,m_])) - init_value_Q[1,m_] for m_=1:(m-1))
+    end
+
+    for i=3:I_
+        for m=2:M
+            #Q  = sqrt( abs(d[i,m_] - d[i-1,m_]) / (epsilon_x * alpha) ) * ((d[i,m_] - d[i-1,m_]) / abs(d[i,m_] - d[i-1,m_]))
+            #Q_ = sqrt( abs(d[i-1,m_] - d[i-2,m_]) / (epsilon_x * alpha) ) * ((d[i-1,m_] - d[i-2,m_]) / abs(d[i-1,m_] - d[i-2,m_]))
+            p[i,m] = sqrt(init_value_p_2[i,1]) - (epsilon_t) / (epsilon_x) * sum( sqrt( abs(d[i,m_] - d[i-1,m_]) / (epsilon_x * alpha) ) * ((d[i,m_] - d[i-1,m_]) / abs(d[i,m_] - d[i-1,m_])) - sqrt( abs(d[i-1,m_] - d[i-2,m_]) / (epsilon_x * alpha) ) * ((d[i-1,m_] - d[i-2,m_]) / abs(d[i-1,m_] - d[i-2,m_])) for m_=1:(m-1))
+        end
+    end
+    if p_Q_out == false
+        return sum((d - p).^2)
+    else
+        return (p, Q)
+    end
+end
 
 
 function p_of_d(d1d2, d2d3, d1d2_abs, d2d3_abs, i, m, p_1)

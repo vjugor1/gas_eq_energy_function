@@ -17,6 +17,10 @@ function left_bound_const(x)
     return  b1
 end
 
+function left_bound_inc(x)
+    return  b1 - a1 * x
+end
+
 function right_bound_const(x)
     return b2# + a2 * x
 end

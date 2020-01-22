@@ -13,12 +13,9 @@ epsilon_x = 1e-1
 step = 1/10.
 #c_s = 300
 alpha = 8.57
-I_ = 5
-M = 80
+I_ = 10
+M = 1000
 ######## GLOBAL PARAMETERS ########
-
-
-
 d_min_p = []
 p_min_p = []
 ps      = []
@@ -26,16 +23,17 @@ ds      = []
 Qs      = []
 criterions = []
 timing    = []
-tmp_out = get_init_p_Q(I_, M, left_bound_const, right_bound_const, initial_value_lin, left_bound_Q_const, 42)
+tmp_out = get_init_p_Q(I_, M, left_bound_const, right_bound_const,
+                        initial_value_lin, left_bound_Q_lin_inc, 42)
 init_value_p_2 = tmp_out[1]
 init_value_Q   = tmp_out[2]
 global criterion = 10
 global iter = 1
 global A  = get_A_block(I_)
-while  (criterion > -8)# & (iter < 3000)
+while  (criterion > -6)# & (iter < 2)
     t1 = time_ns()
     if iter == 1
-        d = init_value_p_2 #reshape([[1.0, 1.0, 1.0];[1.0, 1.0, 1.0];[1.0, 1.0, 1.0]], 3, 3)
+        d = init_value_p_2
         global p_prev = sqrt.(init_value_p_2)
         global Q_prev = init_value_Q
         push!(ps, p_prev)
@@ -43,7 +41,6 @@ while  (criterion > -8)# & (iter < 3000)
         push!(ds, d)
     end
     println("iter = ", iter)
-
     #println("making gradient step..")
     if iter > 1
         tmp = (d - reshape(p_prev, I_, M).^2)
@@ -55,24 +52,32 @@ while  (criterion > -8)# & (iter < 3000)
     #x = rand(10)
     #output = zeros(10,10)
     #FiniteDiff.finite_difference_jacobian!(output,f,x)
-    jac_fin_diff = zeros(I_ * M, I_ * M)
-    p_2(dx, x) = solve_opt!(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, false, x, dx)
+
+    #=jac_fin_diff = zeros(I_ * M, I_ * M)
+    p_2(dx, x) = f_d!(x, dx, init_value_p_2, init_value_Q,
+                                epsilon_t, epsilon_x, false)
+    #p_2(dx, x) = solve_opt!(I_, M, init_value_p_2, init_value_Q,
+                                epsilon_t, epsilon_x, false, x, dx)
     FiniteDiff.finite_difference_jacobian!(jac_fin_diff, p_2, d)
     jacie = jac_fin_diff - Diagonal(ones(I_ * M, I_ * M))
-
     grad = jacie * tmp_r
-    global d  = d + step * reshape(grad, I_, M)
-    #=if iter > 1
+    global d  = d + step * reshape(grad, I_, M)=#
+
+    if iter > 1
         global d  = d - step* (d - reshape(p_prev, I_, M).^2)
-    end=#
+    end
     #println("gradient step done")
     p_prev = zeros(I_, M)
     Q_prev = zeros(I_, M)
     solve_out = [p_prev, Q_prev]
-    solve_opt!(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, true, d, solve_out)
+    f_d!(d, solve_out, init_value_p_2, init_value_Q,
+                            epsilon_t, epsilon_x, true)
+    #solve_opt!(I_, M, init_value_p_2, init_value_Q,
+    #                epsilon_t, epsilon_x, true, d, solve_out)
     p_prev = solve_out[1]
     Q_prev = solve_out[2]
-
+    global init_value_p_2 = p_prev.^2
+    global init_value_Q   = Q_prev
     #println("logging...")
     push!(p_min_p, norm(p_prev - ps[length(ps)]))
     global criterion = log(10, norm(d - p_prev.^2))
@@ -82,11 +87,6 @@ while  (criterion > -8)# & (iter < 3000)
     push!(Qs, Q_prev)
     push!(ds, d)
     #println("logging...done")
-
-
-
-
-
     t2 = time_ns()
     #println("obj = ", objective_value(model))
     println("verbose...")
@@ -97,43 +97,36 @@ while  (criterion > -8)# & (iter < 3000)
     global iter = iter + 1
     push!(timing, (t2 - t1) / 1e9)
 end
+
 println("Total elapsed time = ", sum(timing))
-plot(Array(1:length(timing)), timing, seriestype=:scatter,
-         xlabel = "Iteration Number", ylabel="elapsed time")
-savefig("plot_time.png")
-plot(Array(1:length(d_min_p)), d_min_p, seriestype=:scatter,
-         xlabel = "Iteration Number", ylabel="log||d - p^2||")
-savefig("plot_d_min_p.png")
-plot(Array(1:I_) * epsilon_x, p_prev[:, M],
-         xlabel = "x", ylabel="p(x, T)")
-savefig("plot_p_x_T.png")
-plot(Array(1:I_) * epsilon_x, p_prev[:, 1],
-         xlabel = "x", ylabel="p(x, 0)")
-savefig("plot_p_x_0.png")
-plot(Array(1:I_) * epsilon_x, round.(Q_prev[:, 1], digits=5),
-         xlabel = "x", ylabel="Q(x, 0)")
-savefig("plot_Q_x_0.png")
+
+plot_stuff(timing, "Iteration number", "Elapsed time",
+            true, "timing.png", 1.0, true)
+plot_stuff(d_min_p, "Iteration number", "log||d - p||",
+            true, "plot_d_min_p.png", 1.0, true)
+plot_stuff(p_prev[:, M], "x", "p(x,T)",
+            true, "plot_p_x_T.png", epsilon_x, true)
+plot_stuff(p_prev[:, 1], "x", "p(x,0)",
+            true, "plot_p_x_0.png", epsilon_x, true)
+
+plot_stuff(Q_prev[:, 1], "x", "Q(x,0)", true,
+            "plot_Q_x_0.png", epsilon_x, true)
+
+plot_stuff(Q_prev[:, M], "x", "Q(x,T)", true,
+            "plot_Q_x_T.png", epsilon_x, true)
 
 
-plot(Array(1:(I_)) * epsilon_x, round.(Q_prev[:, M], digits=5),
-                xlabel = "x", ylabel="Q(x, T)")
-savefig("plot_Q_x_T.png")
+plot_stuff(p_prev[1, :], "t", "p(0,t)", true,
+            "plot_p_0_t.png", epsilon_t, true)
 
-plot(Array(1:M) * epsilon_t, p_prev[1, :],
-                xlabel = "t", ylabel="p(0, t)")
-savefig("plot_p_0_t.png")
+plot_stuff(p_prev[I_, :], "t", "p(L,t)", true,
+            "plot_p_L_t.png", epsilon_t, true)
 
-plot(Array(1:M) * epsilon_t, round.(p_prev[I_, :], digits=5),
-                xlabel = "t", ylabel="p(L, t)")
-savefig("plot_p_L_t.png")
-
-for i=1:(trunc(Int, M / 10))
-    plot(Array(1:I_) * epsilon_x, p_prev[:, (i * 10)],
-                    xlabel = "x", ylabel=string("p(x,", string(i*10), ")"))
-    savefig(string("plot_p_x_", string(i*10*epsilon_t), ".png"))
-    plot(Array(1:I_) * epsilon_x, Q_prev[:, (i * 10)],
-                    xlabel = "x", ylabel=string("Q(x,", string(i*10), ")"))
-    savefig(string("plot_Q_x_", string(i*10*epsilon_t), ".png"))
+for i=1:(trunc(Int, M / 100))
+    plot_stuff(p_prev[:, (i * 100)], "x", string("p(x,", string(round(i*100*epsilon_t, digits=3)), ")"),
+                true, string("plot_Q_x_", string(round(i*100*epsilon_t, digits=3)), ".png"), epsilon_t, true)
+    plot_stuff(Q_prev[:, (i * 100)], "x", string("Q(x,", string(round(i*100*epsilon_t, digits=3)), ")"),
+                true, string("plot_Q_x_", string(round(i*100*epsilon_t, digits=3)), ".png"), epsilon_t, true)
 end
 #
 

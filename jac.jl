@@ -7,16 +7,17 @@ using Plots
 
 
 ######## GLOBAL PARAMETERS ########
-epsilon_t = 1e-3
+#=epsilon_t = 1e-3
 epsilon_x = 1e-1
-epsilon = epsilon_t / epsilon_x
-alpha = 8.57
-I_ = 5
-M = 20
+step = 1/10.
+#c_s = 300
+alpha_ = 8.57
+I_ = 10
+M = 1000
 p_1 = zeros(I_)
 for i=1:I_
         p_1[i] = i
-end
+end=#
 ######## GLOBAL PARAMETERS ########
 
 ############ FUNCTIONS ############
@@ -45,7 +46,7 @@ function solve_opt!(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p
     @constraint(model, feeez_Q[idx=1:(M)], Q[1,idx] == init_value_Q[1, idx])
     @constraint(model, pdes[i=2:I_,m=1:(M-1)], (Q[i, m] - Q[i-1, m]) / epsilon_x + (p[i,m+1] - p[i,m]) / epsilon_t == 0.0)
     #println("forming objective...")
-    @NLobjective(model, Min, alpha * (epsilon_x / 3.)*sum(sqrt(Q[i,m]^6) for i=1:I_, m=1:M) -  aux)
+    @NLobjective(model, Min, alpha_ * (epsilon_x / 3.)*sum(sqrt(Q[i,m]^6) for i=1:I_, m=1:M) -  aux)
     #println("forming objective...done")
     #println("optimize...")
     optimize!(model)
@@ -84,7 +85,7 @@ function solve_opt(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_
     @constraint(model, feeez_Q[idx=1:(M)], Q[1,idx] == init_value_Q[1, idx])
     @constraint(model, pdes[i=2:I_,m=1:(M-1)], (Q[i, m] - Q[i-1, m]) / epsilon_x + (p[i,m+1] - p[i,m]) / epsilon_t == 0.0)
     #println("forming objective...")
-    @NLobjective(model, Min, alpha * (epsilon_x / 3.)*sum(sqrt(Q[i,m]^6) for i=1:I_, m=1:M) -  aux)
+    @NLobjective(model, Min, alpha_ * (epsilon_x / 3.)*sum(sqrt(Q[i,m]^6) for i=1:I_, m=1:M) -  aux)
     #println("forming objective...done")
     #println("optimize...")
     optimize!(model)
@@ -98,13 +99,39 @@ function solve_opt(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_
     end
 end
 
+function f_d_backward_euler!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
+    #out of place
+    p = sqrt.(copy(init_value_p_2))
+    Q = copy(init_value_Q)
+    I_, M = size(init_value_p_2)
+    for i=1:(I_-1)
+        for m=1:M
+            Q[i,m] = sqrt( abs((d[i+1,m] - d[i,m])) / (epsilon_x * alpha_) ) * ( abs((d[i+1,m] - d[i,m])) / ((d[i+1,m] - d[i,m])))
+        end
+    end
+
+    for i=1:(I_-1)
+        for m=2:M
+            p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( (Q[i+1,m_] - Q[i,m_]) for m_=2:(m))
+        end
+    end
+    if p_Q_out == false
+        out[:] = p.^2
+        nothing
+    else
+        out[1] = p
+        out[2] = Q
+        nothing
+    end
+end
+
 function f_d!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     #out of place
     p = sqrt.(copy(init_value_p_2))
     Q = copy(init_value_Q)
     for i=2:I_
         for m=1:M
-            Q[i,m] = sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha) ) * ((d[i,m] - d[i-1,m]) / abs(d[i,m] - d[i-1,m]))
+            Q[i,m] = sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * ((d[i,m] - d[i-1,m]) / abs(d[i,m] - d[i-1,m]))
         end
     end
 
@@ -129,7 +156,7 @@ function f_d(d, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     Q = copy(init_value_Q)
     for i=2:I_
         for m=1:M
-            Q[i,m] = sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha) ) * ((d[i,m] - d[i-1,m]) / abs(d[i,m] - d[i-1,m]))
+            Q[i,m] = sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * ((d[i,m] - d[i-1,m]) / abs(d[i,m] - d[i-1,m]))
         end
     end
 
@@ -165,14 +192,14 @@ function f_d_e(d, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     end
     #with initial Q
     for m=2:M
-        p[2,m] = sqrt(init_value_p_2[2,1]) - (epsilon_t) / (epsilon_x) * sum( sqrt( abs(d[2,m_] - d[1,m_]) / (epsilon_x * alpha) ) * ((d[2,m_] - d[1,m_]) / abs(d[2,m_] - d[1,m_])) - init_value_Q[1,m_] for m_=1:(m-1))
+        p[2,m] = sqrt(init_value_p_2[2,1]) - (epsilon_t) / (epsilon_x) * sum( sqrt( abs(d[2,m_] - d[1,m_]) / (epsilon_x * alpha_) ) * ((d[2,m_] - d[1,m_]) / abs(d[2,m_] - d[1,m_])) - init_value_Q[1,m_] for m_=1:(m-1))
     end
 
     for i=3:I_
         for m=2:M
-            #Q  = sqrt( abs(d[i,m_] - d[i-1,m_]) / (epsilon_x * alpha) ) * ((d[i,m_] - d[i-1,m_]) / abs(d[i,m_] - d[i-1,m_]))
-            #Q_ = sqrt( abs(d[i-1,m_] - d[i-2,m_]) / (epsilon_x * alpha) ) * ((d[i-1,m_] - d[i-2,m_]) / abs(d[i-1,m_] - d[i-2,m_]))
-            p[i,m] = sqrt(init_value_p_2[i,1]) - (epsilon_t) / (epsilon_x) * sum( sqrt( abs(d[i,m_] - d[i-1,m_]) / (epsilon_x * alpha) ) * ((d[i,m_] - d[i-1,m_]) / abs(d[i,m_] - d[i-1,m_])) - sqrt( abs(d[i-1,m_] - d[i-2,m_]) / (epsilon_x * alpha) ) * ((d[i-1,m_] - d[i-2,m_]) / abs(d[i-1,m_] - d[i-2,m_])) for m_=1:(m-1))
+            #Q  = sqrt( abs(d[i,m_] - d[i-1,m_]) / (epsilon_x * alpha_) ) * ((d[i,m_] - d[i-1,m_]) / abs(d[i,m_] - d[i-1,m_]))
+            #Q_ = sqrt( abs(d[i-1,m_] - d[i-2,m_]) / (epsilon_x * alpha_) ) * ((d[i-1,m_] - d[i-2,m_]) / abs(d[i-1,m_] - d[i-2,m_]))
+            p[i,m] = sqrt(init_value_p_2[i,1]) - (epsilon_t) / (epsilon_x) * sum( sqrt( abs(d[i,m_] - d[i-1,m_]) / (epsilon_x * alpha_) ) * ((d[i,m_] - d[i-1,m_]) / abs(d[i,m_] - d[i-1,m_])) - sqrt( abs(d[i-1,m_] - d[i-2,m_]) / (epsilon_x * alpha_) ) * ((d[i-1,m_] - d[i-2,m_]) / abs(d[i-1,m_] - d[i-2,m_])) for m_=1:(m-1))
         end
     end
     if p_Q_out == false
@@ -180,6 +207,112 @@ function f_d_e(d, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     else
         return (p, Q)
     end
+end
+
+
+#wrapper function for solving scheme
+
+function solve_scheme!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, opt_solve_method!, crit, init_values=-112)
+    if init_values == -112
+        tmp_out = get_init_p_Q(I_, M, left_bound_const, right_bound_const,
+                            initial_value_lin, left_bound_Q_lin_inc, 42)
+        global init_value_p_2 = tmp_out[1]
+        global init_value_Q   = tmp_out[2]
+    else
+        global init_value_p_2 = init_values[1]
+        global init_value_Q   = init_values[2]
+    end
+    global criterion = 10
+    global iter = 1
+    global A  = get_A_block(I_)
+    while  (criterion > crit)# & (iter < 2)
+        t1 = time_ns()
+        if iter == 1
+            d = init_value_p_2
+            global p_prev = sqrt.(init_value_p_2)
+            global Q_prev = init_value_Q
+            push!(ps, p_prev)
+            push!(Qs, Q_prev)
+            push!(ds, d)
+        end
+        println("iter = ", iter)
+        #println("making gradient step..")
+        #=
+        if iter > 1
+            tmp = (d - reshape(p_prev, I_, M).^2)
+        else
+            tmp = d
+        end
+        tmp_r = reshape(tmp, I_ * M, 1)
+        jac_fin_diff = zeros(I_ * M, I_ * M)
+        p_2(dx, x) = f_d_backward_euler!(x, dx, init_value_p_2, init_value_Q,
+                                    epsilon_t, epsilon_x, false)
+        #p_2(dx, x) = solve_opt!(I_, M, init_value_p_2, init_value_Q,
+        #                            epsilon_t, epsilon_x, false, x, dx)
+        FiniteDiff.finite_difference_jacobian!(jac_fin_diff, p_2, d)
+        jacie = jac_fin_diff - Diagonal(ones(I_ * M, I_ * M))
+        grad = jacie * tmp_r
+        global d  = d + step * reshape(grad, I_, M)=#
+
+
+        if iter > 1
+            global d  = d - step* (d - reshape(p_prev, I_, M).^2)
+        end
+
+
+        #println("gradient step done")
+        p_prev = zeros(I_, M)
+        Q_prev = zeros(I_, M)
+        solve_out = [p_prev, Q_prev]
+        opt_solve_method!(d, solve_out, init_value_p_2, init_value_Q,
+                                epsilon_t, epsilon_x, true)
+        #solve_opt!(I_, M, init_value_p_2, init_value_Q,
+        #                epsilon_t, epsilon_x, true, d, solve_out)
+        p_prev = solve_out[1]
+        Q_prev = solve_out[2]
+        global init_value_p_2 = p_prev.^2
+        global init_value_Q   = Q_prev
+        #println("logging...")
+        push!(p_min_p, norm(p_prev - ps[length(ps)]))
+        global criterion = log(10, norm(d - p_prev.^2))
+        push!(criterions, criterion)
+        push!(d_min_p, criterion)
+        push!(ps, p_prev)
+        push!(Qs, Q_prev)
+        push!(ds, d)
+        #println("logging...done")
+        t2 = time_ns()
+        #println("obj = ", objective_value(model))
+        println("verbose...")
+        #println("|| d - p || = ", d_min_p[length(d_min_p)])
+        #println("|| p_prev - p || = ", p_min_p[length(p_min_p)])
+        println("criterion = ", criterion)
+        println("verbose...done")
+        global iter = iter + 1
+        push!(timing, (t2 - t1) / 1e9)
+    end
+    nothing
+end
+
+# Direct hands solve of pdes
+
+
+function solve_pde_hands(init_value_p_2, init_value_Q,
+                            I_, M, epsilon_x, epsilon_t)
+    p = sqrt.(abs.(init_value_p_2))
+    Q = init_value_Q
+    for m=1:(M-1)
+        for i=2:I_
+            Q[i,m] = sqrt(abs(p[i,m]^2 - p[i-1,m]^2) / (epsilon_x * alpha_) ) *
+                        sign((p[i,m]^2 - p[i-1,m]^2))
+            p[i,m+1] = p[i,m] - epsilon_t * (Q[i,m] - Q[i-1,m]) / epsilon_x
+        end
+    end
+    for i=2:I_
+        Q[i,M] = sqrt(abs(p[i,M]^2 - p[i-1,M]^2) / (epsilon_x * alpha_) ) *
+                    sign((p[i,M]^2 - p[i-1,M]^2))
+    end
+    return (p, Q)
 end
 
 
@@ -192,7 +325,7 @@ function p_of_d(d1d2, d2d3, d1d2_abs, d2d3_abs, i, m, p_1)
         @assert size(d1d2_abs) == size(d2d3_abs)
         @assert size(d1d2) == size(d2d3_abs)
         @assert size(d1d2) == (m-1,)
-        out = p_1 + epsilon / alpha * sum( √(d2d3_abs[m_]) * sign(d2d3[m_]) -
+        out = p_1 + epsilon / alpha_ * sum( √(d2d3_abs[m_]) * sign(d2d3[m_]) -
                         √(d1d2_abs[m_]) * sign(d1d2[m_])   for m_=1:m-1)
 
         return out
@@ -351,5 +484,5 @@ plot(x, y, seriestype=:scatter,
 
 
 #sum(abs((p_prev[i, m+1] - p_prev[i,m]) / epsilon_t + (Q_prev[i, m] - Q_prev[i-1, m]) / epsilon_x) for i=2:(I_-1), m=1:(M-1))
-#sum(abs(abs(Q_prev[i,m]) * Q_prev[i,m] - (p_prev[i+1, m]^2 - p_prev[i,m]^2 )/(epsilon_x * alpha)) for i=1:(I_-1), m=1:M )
-#sum(abs(abs(Q_prev[i,m]) * Q_prev[i,m] - (d[i+1, m] - d[i,m] )/(epsilon_x * alpha)) for i=1:(I_-1), m=1:M )
+#sum(abs(abs(Q_prev[i,m]) * Q_prev[i,m] - (p_prev[i+1, m]^2 - p_prev[i,m]^2 )/(epsilon_x * alpha_)) for i=1:(I_-1), m=1:M )
+#sum(abs(abs(Q_prev[i,m]) * Q_prev[i,m] - (d[i+1, m] - d[i,m] )/(epsilon_x * alpha_)) for i=1:(I_-1), m=1:M )

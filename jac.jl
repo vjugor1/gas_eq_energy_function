@@ -104,15 +104,47 @@ function f_d_backward_euler!(d, out, init_value_p_2, init_value_Q, epsilon_t, ep
     p = sqrt.(copy(init_value_p_2))
     Q = copy(init_value_Q)
     I_, M = size(init_value_p_2)
-    for i=1:(I_-1)
+    for i=2:(I_)
         for m=1:M
-            Q[i,m] = sqrt( abs((d[i+1,m] - d[i,m])) / (epsilon_x * alpha_) ) * ( abs((d[i+1,m] - d[i,m])) / ((d[i+1,m] - d[i,m])))
+            Q[i,m] = - sqrt( abs((d[i,m] - d[i-1,m])) / (epsilon_x * alpha_) ) * ( abs((d[i,m] - d[i-1,m])) / ((d[i,m] - d[i-1,m])))
+        end
+    end
+
+    for i=2:(I_)
+        for m=2:M
+            p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( (Q[i,m_] - Q[i-1,m_]) for m_=2:(m))
+        end
+    end
+    if p_Q_out == false
+        out[:] = p.^2
+        nothing
+    else
+        out[1] = p
+        out[2] = Q
+        nothing
+    end
+end
+
+function f_d_mccormack!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
+    #out of place
+    p = sqrt.(copy(init_value_p_2))
+    p_hat = sqrt.(copy(init_value_p_2))
+    Q = copy(init_value_Q)
+    I_, M = size(init_value_p_2)
+    for i=2:(I_)
+        for m=1:M
+            Q[i,m] = sqrt( abs((d[i,m] - d[i-1,m])) / (epsilon_x * alpha_) ) * ( abs((d[i,m] - d[i-1,m])) / ((d[i,m] - d[i-1,m])))
         end
     end
 
     for i=1:(I_-1)
-        for m=2:M
-            p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( (Q[i+1,m_] - Q[i,m_]) for m_=2:(m))
+        for m=1:(M-1)
+            p_hat[i,m+1] = p[i,m] - epsilon_t / epsilon_x * (Q[i+1,m] - Q[i,m])
+        end
+    end
+    for i=2:(I_)
+        for m=1:(M-1)
+            p[i,m+1] = (p[i,m] + p_hat[i,m+1]) / 2.0 - (epsilon_t) / (2.0 * epsilon_x) * (p_hat[i,m+1] - p_hat[i-1,m+1])
         end
     end
     if p_Q_out == false
@@ -131,7 +163,7 @@ function f_d!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_ou
     Q = copy(init_value_Q)
     for i=2:I_
         for m=1:M
-            Q[i,m] = sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * ((d[i,m] - d[i-1,m]) / abs(d[i,m] - d[i-1,m]))
+            Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
         end
     end
 
@@ -215,7 +247,7 @@ end
 function solve_scheme!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, opt_solve_method!, crit, init_values=-112)
     if init_values == -112
         tmp_out = get_init_p_Q(I_, M, left_bound_const, right_bound_const,
-                            initial_value_lin, left_bound_Q_lin_inc, 42)
+                            initial_value_lin, left_bound_Q_const, 42)
         global init_value_p_2 = tmp_out[1]
         global init_value_Q   = tmp_out[2]
     else

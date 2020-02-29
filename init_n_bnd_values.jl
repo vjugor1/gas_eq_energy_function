@@ -6,7 +6,7 @@ using Interpolations
 
 
 
-a1 = 0.2
+a1 = 0.4
 w1 = 100
 b1 = 0.3
 
@@ -18,7 +18,7 @@ function left_bound_const(x)
 end
 
 function left_bound_inc(x)
-    return  b1 - a1 * x
+    return  b1 + a1 * x
 end
 
 function right_bound_const(x)
@@ -36,7 +36,7 @@ function left_bound_Q_lin_inc(x)
     return sqrt(abs(a) / alpha_) * (1 + x * 10)
 end
 function left_bound_Q_const(x)
-    return sqrt(abs(a) / alpha_) * 2
+    return - sqrt(abs(a) / alpha_) * 1.3
 end
 
 
@@ -94,12 +94,14 @@ function get_higher_resolution_init_vals(L, T, p_low, Q_low, eps_x_low, eps_t_lo
     p_new = zeros(I_new, M_new)
     Q_new = zeros(I_new, M_new)
     I_low, M_low = size(p_low)
-    x_low = collect(1:I_low) * eps_x_low .- eps_x_low
-    t_low = collect(1:M_low) * eps_t_low .- eps_t_low
+    x_low = collect(0:(I_low-1)) * eps_x_low .- eps_x_low
+    t_low = collect(0:(M_low-1)) * eps_t_low .- eps_t_low
     itp_p = interpolate((x_low, t_low), p_low, Gridded(Linear()))
     itp_Q = interpolate((x_low, t_low), Q_low, Gridded(Linear()))
     for i=1:I_new
         for m=1:M_new
+            #println((i-1) * eps_x_new)
+            #println((m-1) * eps_t_new)
             p_new[i,m] = itp_p((i-1) * eps_x_new, (m-1) * eps_t_new)
             Q_new[i,m] = itp_Q((i-1) * eps_x_new, (m-1) * eps_t_new)
         end

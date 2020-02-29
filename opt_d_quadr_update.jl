@@ -12,12 +12,20 @@ include("plotly_3d_graphs.jl")
 
 ######## GLOBAL PARAMETERS ########
 L = 1.0
-T = 1.0
-I_ = 10
-M  = 1000
+T = 0.5
+I_ = 10#10
+M  = 400 #200
 epsilon_t = T / M
 epsilon_x = L / I_
-step = 1/10.
+
+#=epsilon_t = 1e-3
+epsilon_x = 1e-1
+L = 1.0
+T = 1.0
+I_ = 12
+M = 1002=#
+
+step = 1e-1
 #c_s = 300
 alpha_ = 8.57
 
@@ -32,8 +40,8 @@ timing    = []
 solve_scheme!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, f_d!, -6)
 #=p_low = ps[length(ps)]
 Q_low = Qs[length(Qs)]
-eps_x_new = 1e-1
-eps_t_new = 1e-6
+eps_x_new = 1e-1 / 2
+eps_t_new = 1e-3
 step = 1/100.
 p_high_sq, Q_high, I_, M = get_higher_resolution_init_vals(L, T, p_low.^2, Q_low, epsilon_x, epsilon_t, eps_x_new, eps_t_new)
 solve_scheme!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, f_d!, -6, [p_high_sq, Q_high])=#

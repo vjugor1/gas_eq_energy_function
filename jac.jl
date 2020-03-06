@@ -4,7 +4,7 @@ using JuMP
 using Ipopt
 using Random
 using Plots
-
+include("init_n_bnd_values.jl")
 
 ######## GLOBAL PARAMETERS ########
 #=epsilon_t = 1e-3
@@ -23,8 +23,9 @@ end=#
 ############ FUNCTIONS ############
 
 
-
-function solve_opt!(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out, d, out)
+#opt_solve_method!(d, solve_out, init_value_p_2, init_value_Q,
+#                        epsilon_t, epsilon_x, true)
+function solve_opt!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     #In-place type
     model = Model(with_optimizer(Ipopt.Optimizer, print_level=0))
     @variable(model, Q[i=1:I_, m=1:M], start=init_value_Q[i, m] )
@@ -44,7 +45,7 @@ function solve_opt!(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p
     @constraint(model, aux == obj2)
     @constraint(model, feeez[idx=1:(I_)], p[idx,1] == sqrt(init_value_p_2[idx, 1]))
     @constraint(model, feeez_Q[idx=1:(M)], Q[1,idx] == init_value_Q[1, idx])
-    @constraint(model, pdes[i=2:I_,m=1:(M-1)], (Q[i, m] - Q[i-1, m]) / epsilon_x + (p[i,m+1] - p[i,m]) / epsilon_t == 0.0)
+    @constraint(model, pdes[i=1:I_-1,m=1:(M-1)], (Q[i+1, m] - Q[i, m]) / epsilon_x + (p[i,m+1] - p[i,m]) / epsilon_t == 0.0)
     #println("forming objective...")
     @NLobjective(model, Min, alpha_ * (epsilon_x / 3.)*sum(sqrt(Q[i,m]^6) for i=1:I_, m=1:M) -  aux)
     #println("forming objective...done")
@@ -99,7 +100,7 @@ function solve_opt(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_
     end
 end
 
-function f_d_backward_euler!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
+function f_d_bwd_eul!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     #out of place
     p = sqrt.(copy(init_value_p_2))
     Q = copy(init_value_Q)
@@ -125,26 +126,20 @@ function f_d_backward_euler!(d, out, init_value_p_2, init_value_Q, epsilon_t, ep
     end
 end
 
-function f_d_mccormack!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
+
+function f_d!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     #out of place
     p = sqrt.(copy(init_value_p_2))
-    p_hat = sqrt.(copy(init_value_p_2))
     Q = copy(init_value_Q)
-    I_, M = size(init_value_p_2)
     for i=2:(I_)
         for m=1:M
-            Q[i,m] = sqrt( abs((d[i,m] - d[i-1,m])) / (epsilon_x * alpha_) ) * ( abs((d[i,m] - d[i-1,m])) / ((d[i,m] - d[i-1,m])))
+            Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
         end
     end
 
     for i=1:(I_-1)
-        for m=1:(M-1)
-            p_hat[i,m+1] = p[i,m] - epsilon_t / epsilon_x * (Q[i+1,m] - Q[i,m])
-        end
-    end
-    for i=2:(I_)
-        for m=1:(M-1)
-            p[i,m+1] = (p[i,m] + p_hat[i,m+1]) / 2.0 - (epsilon_t) / (2.0 * epsilon_x) * (p_hat[i,m+1] - p_hat[i-1,m+1])
+        for m=2:M
+            p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
         end
     end
     if p_Q_out == false
@@ -157,21 +152,75 @@ function f_d_mccormack!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon
     end
 end
 
-function f_d!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
+function f_d_3_pipes!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     #out of place
+    # (3 I_ - 2) x M
     p = sqrt.(copy(init_value_p_2))
     Q = copy(init_value_Q)
-    for i=2:I_
-        for m=1:M
+
+    for m=1:M
+        d[2 * I_, m] = d[2 * I_ + 1, m]
+        d[I_, m] = d[2 * I_ + 1, m]
+        p[2 * I_, m] = p[2 * I_ + 1, m]
+        p[I_, m] = p[2 * I_ + 1, m]
+        #=d[2 * I_, m] = d[I_, m]
+        d[2 * I_ + 1, m] = d[I_, m]
+        p[2 * I_, m] = p[I_, m]
+        p[2 * I_ + 1, m] = p[I_, m]=#
+    end
+
+    p[1 + 2 * I_, 1] = p[I_, 1]
+
+
+    for m=1:M
+        for i=2:(I_)
             Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
         end
     end
 
-    for i=2:I_
-        for m=2:M
-            p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( Q[i,m_] - Q[i-1,m_] for m_=1:(m-1))
+    for m=1:M
+        for i=(2 + I_):(2 * I_)
+            #if i < 2 * I_
+                Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
+            #=elseif i == 2 * I_
+                Q[i,m] = - sqrt( abs(d[I_,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * sign(d[I_,m] - d[i-1,m])
+            end=#
         end
     end
+
+    for m=1:M
+        Q[1 + 2 * I_, m] = Q[I_, m] + Q[2 * I_, m]
+    end
+    for m=1:M
+        for i=(2 + 2 * I_):(3 * I_)
+            #if i == 2 + 2 * I_
+                Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
+            #=else
+                Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (epsilon_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
+            end=#
+        end
+    end
+
+    for m=2:M
+        for i=1:(I_-1)
+            p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
+        end
+    end
+    for m=2:M
+        for i=(1 + I_):(2 * I_ - 1)
+            p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
+        end
+    end
+    for m=2:M
+        for i=(1 + 2 * I_):(3 * I_ - 1)
+            #if i == 1 + 2 * I_
+                p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
+            #=else
+                p[i,m] = p[i,1] - (epsilon_t) / (epsilon_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
+            end=#
+        end
+    end
+
     if p_Q_out == false
         out[:] = p.^2
         nothing
@@ -246,8 +295,8 @@ end
 
 function solve_scheme!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, opt_solve_method!, crit, init_values=-112)
     if init_values == -112
-        tmp_out = get_init_p_Q(I_, M, left_bound_const, right_bound_const,
-                            initial_value_lin, left_bound_Q_const, 42)
+        tmp_out = get_init_p_Q(I_, M, right_bound_const, left_bound_const,
+                            initial_value_lin, left_bound_Q_const, right_bound_Q_const, 42)
         global init_value_p_2 = tmp_out[1]
         global init_value_Q   = tmp_out[2]
     else
@@ -295,6 +344,89 @@ function solve_scheme!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, 
         #println("gradient step done")
         p_prev = zeros(I_, M)
         Q_prev = zeros(I_, M)
+        solve_out = [p_prev, Q_prev]
+        opt_solve_method!(d, solve_out, init_value_p_2, init_value_Q,
+                                epsilon_t, epsilon_x, true)
+        #solve_opt!(I_, M, init_value_p_2, init_value_Q,
+        #                epsilon_t, epsilon_x, true, d, solve_out)
+        p_prev = solve_out[1]
+        Q_prev = solve_out[2]
+        global init_value_p_2 = p_prev.^2
+        global init_value_Q   = Q_prev
+        #println("logging...")
+        push!(p_min_p, norm(p_prev - ps[length(ps)]))
+        global criterion = log(10, norm(d - p_prev.^2))
+        push!(criterions, criterion)
+        push!(d_min_p, criterion)
+        push!(ps, p_prev)
+        push!(Qs, Q_prev)
+        push!(ds, d)
+        #println("logging...done")
+        t2 = time_ns()
+        #println("obj = ", objective_value(model))
+        println("verbose...")
+        #println("|| d - p || = ", d_min_p[length(d_min_p)])
+        #println("|| p_prev - p || = ", p_min_p[length(p_min_p)])
+        println("criterion = ", criterion)
+        println("verbose...done")
+        global iter = iter + 1
+        push!(timing, (t2 - t1) / 1e9)
+    end
+    nothing
+end
+
+function solve_scheme_3_pipes!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, opt_solve_method!, crit, init_values=-112)
+    if init_values == -112
+        tmp_out = get_init_p_Q(I_, M, right_bound_const, left_bound_const,
+                            initial_value_lin, left_bound_Q_const, right_bound_Q_const, 42)
+        tmp_out_third_pipe = get_init_p_Q(I_, M, right_bound_const_3rd, left_bound_const_3rd,
+                            initial_value_lin, left_bound_Q_const_3rd, right_bound_Q_const_3rd, 42)
+        global init_value_p_2 = [tmp_out[1]; tmp_out[1]; tmp_out_third_pipe[1]]
+        global init_value_Q   = [tmp_out[2]; tmp_out[2]; tmp_out_third_pipe[2]]
+    else
+        global init_value_p_2 = init_values[1]
+        global init_value_Q   = init_values[2]
+    end
+    global criterion = 10
+    global iter = 1
+    while  (criterion > crit)# & (iter < 2)
+        t1 = time_ns()
+        if iter == 1
+            d = init_value_p_2
+            global p_prev = sqrt.(init_value_p_2)
+            global Q_prev = init_value_Q
+            push!(ps, p_prev)
+            push!(Qs, Q_prev)
+            push!(ds, d)
+        end
+        println("iter = ", iter)
+        #println("making gradient step..")
+        #=
+        if iter > 1
+            tmp = (d - reshape(p_prev, I_, M).^2)
+        else
+            tmp = d
+        end
+        tmp_r = reshape(tmp, I_ * M, 1)
+        jac_fin_diff = zeros(I_ * M, I_ * M)
+        p_2(dx, x) = f_d_backward_euler!(x, dx, init_value_p_2, init_value_Q,
+                                    epsilon_t, epsilon_x, false)
+        #p_2(dx, x) = solve_opt!(I_, M, init_value_p_2, init_value_Q,
+        #                            epsilon_t, epsilon_x, false, x, dx)
+        FiniteDiff.finite_difference_jacobian!(jac_fin_diff, p_2, d)
+        jacie = jac_fin_diff - Diagonal(ones(I_ * M, I_ * M))
+        grad = jacie * tmp_r
+        global d  = d + step * reshape(grad, I_, M)=#
+
+
+        if iter > 1
+            global d  = d - step* (d - reshape(p_prev, 3 * I_, M).^2)
+        end
+
+
+        #println("gradient step done")
+        p_prev = zeros(3 * I_, M)
+        Q_prev = zeros(3 * I_, M)
         solve_out = [p_prev, Q_prev]
         opt_solve_method!(d, solve_out, init_value_p_2, init_value_Q,
                                 epsilon_t, epsilon_x, true)

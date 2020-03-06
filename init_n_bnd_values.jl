@@ -8,13 +8,16 @@ using Interpolations
 
 a1 = 0.4
 w1 = 100
-b1 = 0.3
+b1 = 0.35
 
 a2 = -0.2
 w2 = 100
 b2 = 0.4
 function left_bound_const(x)
     return  b1
+end
+function left_bound_const_3rd(x)
+    return  0.15
 end
 
 function left_bound_inc(x)
@@ -25,6 +28,11 @@ function right_bound_const(x)
     return b2# + a2 * x
 end
 
+function right_bound_const_3rd(x)
+    return b1# + a2 * x
+end
+
+
 function right_bound_lin(x)
     return b2 + a2 * x
 end
@@ -33,11 +41,22 @@ function left_bound_Q_lin_dec(x)
     return sqrt(abs(a) / alpha_) * (1 - x * 10)
 end
 function left_bound_Q_lin_inc(x)
-    return sqrt(abs(a) / alpha_) * (1 + x * 10)
+    return sqrt(abs(a) / alpha_) * (1 + (x - epsilon_t) * 0)
 end
 function left_bound_Q_const(x)
-    return - sqrt(abs(a) / alpha_) * 1.3
+    return  sqrt(abs(a) / alpha_) * 2.0
 end
+function right_bound_Q_const(x)
+    return  sqrt(abs(a) / alpha_) * 1.0
+end
+
+function left_bound_Q_const_3rd(x)
+    return  sqrt(abs(a) / alpha_) * 2.0
+end
+function right_bound_Q_const_3rd(x)
+    return  sqrt(abs(a) / alpha_) * 2.0
+end
+
 
 
 function left_bound_Q_right_dec(x)
@@ -51,6 +70,7 @@ function initial_value_lin(x, lb_foo, rb_foo)
     ### consistency ###
     return a * x + b
 end
+
 
 
 ############ Bound functions ############
@@ -75,9 +95,13 @@ function set_lb_Q!(init_, foo)
     M_ = size(init_)[2]
     init_[1,:] = foo.(collect(1:M_) * epsilon_t)
 end
-
+function set_rb_Q!(init_, foo)
+    M_ = size(init_)[2]
+    I__ = size(init_)[1]
+    init_[I__,:] = foo.(collect(1:M_) * epsilon_t)
+end
 ############ Get initial and boundary conditions ############
-function get_init_p_Q(I_, M, lb_foo_p, rb_foo_p, init_foo_p, lb_foo_Q, rnd_seed)
+function get_init_p_Q(I_, M, lb_foo_p, rb_foo_p, init_foo_p, lb_foo_Q, rb_foo_Q, rnd_seed)
     Random.seed!(rnd_seed)
     init_value_p_2 = (rand(I_, M)).^2
     set_lb_pressure!(init_value_p_2, lb_foo_p)
@@ -85,6 +109,7 @@ function get_init_p_Q(I_, M, lb_foo_p, rb_foo_p, init_foo_p, lb_foo_Q, rnd_seed)
     set_init_pressure!(init_value_p_2, init_foo_p, lb_foo_p, rb_foo_p)
     init_value_Q = ones(I_,M) * sqrt(abs(a) / alpha_) # / alpha_ * epsilon_x
     set_lb_Q!(init_value_Q, lb_foo_Q)
+    set_rb_Q!(init_value_Q, rb_foo_Q)
     return (init_value_p_2, init_value_Q)
 end
 

@@ -71,7 +71,12 @@ function initial_value_lin(x, lb_foo, rb_foo)
     return a * x + b
 end
 
-
+function foo_const(a, x)
+    return a
+end
+function foo_lin(a, b, x)
+    return a * x + b
+end
 
 ############ Bound functions ############
 
@@ -132,4 +137,45 @@ function get_higher_resolution_init_vals(L, T, p_low, Q_low, eps_x_low, eps_t_lo
         end
     end
     return p_new, Q_new, I_new, M_new
+end
+
+function get_init_p_Q_const_pressures(I_, M, lb_foo_p, rb_foo_p, L_pipe, rnd_seed)
+    Random.seed!(rnd_seed)
+    init_value_p_2 = (rand(I_, M)).^2
+    set_lb_pressure!(init_value_p_2, lb_foo_p)
+    set_rb_pressure!(init_value_p_2, rb_foo_p)
+    set_init_pressure!(init_value_p_2, initial_value_lin, lb_foo_p, rb_foo_p)
+    init_value_Q = ones(I_,M) * sign(init_value_p_2[1,1] - init_value_p_2[I_, 1]) *  sqrt(abs(init_value_p_2[1,1] - init_value_p_2[I_, 1]) / (alpha_ * L_pipe)) # / alpha_ * epsilon_x
+    #set_lb_Q!(init_value_Q, lb_foo_Q)
+    #set_rb_Q!(init_value_Q, rb_foo_Q)
+    return init_value_p_2, init_value_Q
+end
+
+function get_init_value_grid(I_, M, A_inc, lb_foo_p_list, rb_foo_p_list, L_pipes_list, rnd_seed)
+    n_junc, n_pipes = size(A_inc)
+    init_value_p_2, init_value_Q = get_init_p_Q_const_pressures(I_, M, lb_foo_p_list[1], rb_foo_p_list[1], L_pipes_list[1], rnd_seed)
+    for i=2:n_pipes
+        #init vals for next pipe
+        init_value_p_2_tmp, init_value_Q_tmp = get_init_p_Q_const_pressures(I_, M, lb_foo_p_list[i], rb_foo_p_list[i], L_pipes_list[i], rnd_seed)
+        #adding to whole matrices of pipe variables
+        init_value_p_2 = [init_value_p_2; init_value_p_2_tmp]
+        init_value_Q = [init_value_Q; init_value_Q_tmp]
+    end
+    return init_value_p_2, init_value_Q
+end
+
+function find_edge(edges_dict, f_junction, t_junction)
+    for (k, v) in edges_dict
+        if (v[1] == f_junction) & (v[2] == t_junction)
+            return k
+        end
+    end
+end
+
+
+function compute_throughput(p_i_2, p_j_2, alpha_, L_ij)
+    return sqrt(abs(p_i_2 - p_j_2) / (alpha_ * L_ij))
+end
+function compute_right_pressure_2(p_i_2, Q_ij, alpha_, L_ij)
+    return p_i_2 - alpha_ * Q_ij * L_ij
 end

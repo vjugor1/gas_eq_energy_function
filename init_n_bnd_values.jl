@@ -1,5 +1,5 @@
 using Interpolations
-
+include("grid_graph.jl")
 
 
 ######## Bound functions #########
@@ -77,7 +77,10 @@ end
 function foo_lin(a, b, x)
     return a * x + b
 end
-
+function lin_space(a, b, n)
+    delta = (b - a) / (n-1)
+    return collect(a:delta:b)
+end
 ############ Bound functions ############
 
 ############ Get initial and boundary conditions ############
@@ -151,31 +154,16 @@ function get_init_p_Q_const_pressures(I_, M, lb_foo_p, rb_foo_p, L_pipe, rnd_see
     return init_value_p_2, init_value_Q
 end
 
-function get_init_value_grid(I_, M, A_inc, lb_foo_p_list, rb_foo_p_list, L_pipes_list, rnd_seed)
-    n_junc, n_pipes = size(A_inc)
-    init_value_p_2, init_value_Q = get_init_p_Q_const_pressures(I_, M, lb_foo_p_list[1], rb_foo_p_list[1], L_pipes_list[1], rnd_seed)
-    for i=2:n_pipes
-        #init vals for next pipe
-        init_value_p_2_tmp, init_value_Q_tmp = get_init_p_Q_const_pressures(I_, M, lb_foo_p_list[i], rb_foo_p_list[i], L_pipes_list[i], rnd_seed)
-        #adding to whole matrices of pipe variables
-        init_value_p_2 = [init_value_p_2; init_value_p_2_tmp]
-        init_value_Q = [init_value_Q; init_value_Q_tmp]
+function get_init_value_grid(e_dict_p_Q_, I_, M)
+    n_pipes = length(e_dict_p_Q_)
+    init_value_p_2 = zeros(I_ * n_pipes, M)
+    init_value_Q   = zeros(I_ * n_pipes, M)
+    for (i, (k, v)) in enumerate(e_dict_p_Q_)
+        #if i < n_pipes
+        init_value_Q[(1 + (i - 1) * I_):((i) * I_),:]   = v[6] * ones(I_, M)
+        p_2_range = lin_space(v[4], v[5], I_)
+        init_value_p_2[(1 + (i - 1) * I_):((i) * I_),:] = p_2_range * reshape(ones(M), 1, M)
+        #end
     end
     return init_value_p_2, init_value_Q
-end
-
-function find_edge(edges_dict, f_junction, t_junction)
-    for (k, v) in edges_dict
-        if (v[1] == f_junction) & (v[2] == t_junction)
-            return k
-        end
-    end
-end
-
-
-function compute_throughput(p_i_2, p_j_2, alpha_, L_ij)
-    return sqrt(abs(p_i_2 - p_j_2) / (alpha_ * L_ij))
-end
-function compute_right_pressure_2(p_i_2, Q_ij, alpha_, L_ij)
-    return p_i_2 - alpha_ * Q_ij * L_ij
 end

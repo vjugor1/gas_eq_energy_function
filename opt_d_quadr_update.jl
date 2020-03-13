@@ -12,11 +12,11 @@ include("plotly_3d_graphs.jl")
 
 ######## GLOBAL PARAMETERS ########
 L = 1.0
-T = 1.0
+T = 0.05
 I_ = 10#10
-M  = 500 #200
+M  = 100 #200
 epsilon_t = T / M
-epsilon_x = L / I_
+#epsilon_x = L / I_
 
 #=epsilon_t = 1e-3
 epsilon_x = 1e-1
@@ -37,7 +37,18 @@ ds      = []
 Qs      = []
 criterions = []
 timing    = []
-solve_scheme_3_pipes!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, f_d_3_pipes!, -5.5)
+#belgian
+j_list, e_dict = get_clean_belgian_j_e()
+e_dict_p_Q = set_stat_p_Q(j_list, e_dict, alpha_)
+A_inc = get_inc_matrix(j_list, e_dict)
+solve_scheme_belgian!(I_, M, j_list,
+                                e_dict_p_Q, A_inc, d_min_p, p_min_p, ps, ds,
+                                Qs, criterions, timing, f_d_belg!, -6)
+
+#3 pipes
+#solve_scheme_3_pipes!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, f_d_3_pipes!, -5.5)
+
+#1 pipe
 #solve_scheme!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, f_d!, -6)
 #=p_low = ps[length(ps)]
 Q_low = Qs[length(Qs)]

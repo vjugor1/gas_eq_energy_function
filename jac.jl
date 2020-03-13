@@ -152,6 +152,78 @@ function f_d!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_ou
     end
 end
 
+function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_inc, epsilon_t, p_Q_out)
+    p = sqrt.(deepcopy(init_value_p_2))
+    Q = deepcopy(init_value_Q)
+    v_num, e_num = size(A_inc)
+    for e_idx=1:e_num
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
+        if !isempty(out_going_edges_idxs)
+            for out_e_idx in out_going_edges_idxs
+                for m=1:M
+                    d[e_idx * I_, m] = d[(out_e_idx - 1) * I_ + 1,m]
+                    p[e_idx * I_, m] = p[(out_e_idx - 1) * I_ + 1,m]
+                end
+            end
+        end
+    end
+    for e_idx=1:e_num
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+        edge_L = e_dict_p_Q[edge_name][3]
+        edge_eps_x = edge_L / I_
+        for m=1:M
+            for i=(2 + (e_idx-1) * I_):(e_idx * I_)
+                Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (edge_eps_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
+            end
+        end
+    end
+    for e_idx=1:e_num
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
+        in_going_edges_idxs  = findall(x->x==1.0, A_inc[t,:])
+        if !isempty(out_going_edges_idxs)
+            if length(out_going_edges_idxs) == 1
+                for m=1:M
+                    Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs)
+                end
+            else
+                for m=1:M
+                    Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                end
+            end
+        end
+    end
+    for e_idx=1:e_num
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+        edge_L = e_dict_p_Q[edge_name][3]
+        edge_eps_x = edge_L / I_
+        for m=2:M
+            for i=(1 + (e_idx-1) * I_):(e_idx * I_ - 1)
+                p[i,m] = p[i,1] - (epsilon_t) / (edge_eps_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
+            end
+        end
+    end
+    if p_Q_out == false
+        out[:] = p.^2
+        nothing
+    else
+        out[1] = p
+        out[2] = Q
+        nothing
+    end
+end
+
 function f_d_3_pipes!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     #out of place
     # (3 I_ - 2) x M
@@ -253,42 +325,6 @@ function f_d(d, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     end
 end
 
-function f_d_e(d, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
-    #in place
-    #p = similar(d)
-    d  = reshape(d, I_, M)
-    p  = Array{Any, 2}(undef, I_, M)
-    #println("kkk")
-    #p[1,1] = d[1,1] - init_value_p_2[1,1]
-    #println("kkk")
-    #initial condition p
-    for i=1:I_
-        p[i,1] = d[i,1] - d[i,1] + sqrt(init_value_p_2[i,1])
-    end
-
-    #left bound p
-
-    for m=1:M
-        p[1,m] = d[1,m] - d[1,m] + sqrt(init_value_p_2[1,m])
-    end
-    #with initial Q
-    for m=2:M
-        p[2,m] = sqrt(init_value_p_2[2,1]) - (epsilon_t) / (epsilon_x) * sum( sqrt( abs(d[2,m_] - d[1,m_]) / (epsilon_x * alpha_) ) * ((d[2,m_] - d[1,m_]) / abs(d[2,m_] - d[1,m_])) - init_value_Q[1,m_] for m_=1:(m-1))
-    end
-
-    for i=3:I_
-        for m=2:M
-            #Q  = sqrt( abs(d[i,m_] - d[i-1,m_]) / (epsilon_x * alpha_) ) * ((d[i,m_] - d[i-1,m_]) / abs(d[i,m_] - d[i-1,m_]))
-            #Q_ = sqrt( abs(d[i-1,m_] - d[i-2,m_]) / (epsilon_x * alpha_) ) * ((d[i-1,m_] - d[i-2,m_]) / abs(d[i-1,m_] - d[i-2,m_]))
-            p[i,m] = sqrt(init_value_p_2[i,1]) - (epsilon_t) / (epsilon_x) * sum( sqrt( abs(d[i,m_] - d[i-1,m_]) / (epsilon_x * alpha_) ) * ((d[i,m_] - d[i-1,m_]) / abs(d[i,m_] - d[i-1,m_])) - sqrt( abs(d[i-1,m_] - d[i-2,m_]) / (epsilon_x * alpha_) ) * ((d[i-1,m_] - d[i-2,m_]) / abs(d[i-1,m_] - d[i-2,m_])) for m_=1:(m-1))
-        end
-    end
-    if p_Q_out == false
-        return sum((d - p).^2)
-    else
-        return (p, Q)
-    end
-end
 
 
 #wrapper function for solving scheme
@@ -430,6 +466,86 @@ function solve_scheme_3_pipes!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, 
         solve_out = [p_prev, Q_prev]
         opt_solve_method!(d, solve_out, init_value_p_2, init_value_Q,
                                 epsilon_t, epsilon_x, true)
+        #solve_opt!(I_, M, init_value_p_2, init_value_Q,
+        #                epsilon_t, epsilon_x, true, d, solve_out)
+        p_prev = solve_out[1]
+        Q_prev = solve_out[2]
+        global init_value_p_2 = p_prev.^2
+        global init_value_Q   = Q_prev
+        #println("logging...")
+        push!(p_min_p, norm(p_prev - ps[length(ps)]))
+        global criterion = log(10, norm(d - p_prev.^2))
+        push!(criterions, criterion)
+        push!(d_min_p, criterion)
+        push!(ps, p_prev)
+        push!(Qs, Q_prev)
+        push!(ds, d)
+        #println("logging...done")
+        t2 = time_ns()
+        #println("obj = ", objective_value(model))
+        println("verbose...")
+        #println("|| d - p || = ", d_min_p[length(d_min_p)])
+        #println("|| p_prev - p || = ", p_min_p[length(p_min_p)])
+        println("criterion = ", criterion)
+        println("verbose...done")
+        global iter = iter + 1
+        push!(timing, (t2 - t1) / 1e9)
+    end
+    nothing
+end
+
+function solve_scheme_belgian!(I_, M, j_list,
+                                e_dict_p_Q_, A_inc,  d_min_p, p_min_p, ps, ds,
+                                Qs, criterions, timing, opt_solve_method!, crit)
+    tmp_init = get_init_value_grid(e_dict_p_Q_, I_, M)
+    global init_value_p_2 = tmp_init[1]
+    global init_value_Q   = tmp_init[2]
+    global criterion = 10
+    global iter = 1
+    global e_num = length(e_dict_p_Q_)
+    while  (criterion > crit)# & (iter < 2)
+        t1 = time_ns()
+        if iter == 1
+            d = init_value_p_2
+            global p_prev = sqrt.(init_value_p_2)
+            global Q_prev = init_value_Q
+            push!(ps, p_prev)
+            push!(Qs, Q_prev)
+            push!(ds, d)
+        end
+        println("iter = ", iter)
+        #println("making gradient step..")
+        #=
+        if iter > 1
+            tmp = (d - reshape(p_prev, I_, M).^2)
+        else
+            tmp = d
+        end
+        tmp_r = reshape(tmp, I_ * M, 1)
+        jac_fin_diff = zeros(I_ * M, I_ * M)
+        p_2(dx, x) = f_d_backward_euler!(x, dx, init_value_p_2, init_value_Q,
+                                    epsilon_t, epsilon_x, false)
+        #p_2(dx, x) = solve_opt!(I_, M, init_value_p_2, init_value_Q,
+        #                            epsilon_t, epsilon_x, false, x, dx)
+        FiniteDiff.finite_difference_jacobian!(jac_fin_diff, p_2, d)
+        jacie = jac_fin_diff - Diagonal(ones(I_ * M, I_ * M))
+        grad = jacie * tmp_r
+        global d  = d + step * reshape(grad, I_, M)=#
+
+
+        if iter > 1
+            global d  = d - step* (d - reshape(p_prev, e_num * I_, M).^2)
+        end
+
+
+        #println("gradient step done")
+        p_prev = zeros(e_num * I_, M)
+        Q_prev = zeros(e_num * I_, M)
+        solve_out = [p_prev, Q_prev]
+        #f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_inc, epsilon_t, p_Q_out)
+        opt_solve_method!(d, solve_out, init_value_p_2, init_value_Q, j_list,
+                                e_dict_p_Q_, A_inc,
+                                epsilon_t, true)
         #solve_opt!(I_, M, init_value_p_2, init_value_Q,
         #                epsilon_t, epsilon_x, true, d, solve_out)
         p_prev = solve_out[1]

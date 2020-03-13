@@ -1,5 +1,5 @@
 using JSON
-path_belgian = "gas_eq_energy_function/belgian_lanl_ansi.json"
+path_belgian = "belgian_lanl_ansi.json"
 function read_json!(out, file_name)
     dict = Dict()
     open(file_name, "r") do f
@@ -16,7 +16,7 @@ function get_j_list_e_dict(data_dict)
     end
     edge_dict = Dict()
     for (k, v) in data_dict["pipe"]
-        edge_dict[k] = (string(v["f_junction"]), string(v["t_junction"]), v["length"] / 100000.0)
+        edge_dict[k] = [string(v["f_junction"]), string(v["t_junction"]), v["length"] / 100000.0]
     end
     return junction_list, edge_dict
 end
@@ -35,48 +35,21 @@ function clean_belgian_leave_pipes_only(j_list, e_dict)
     for item in e_to_delete
         delete!(e_dict, item)
     end
+    for (k, v) in e_dict
+        for (k_, v_) in e_dict
+            if ((k != k_) & (v == v_))
+                delete!(e_dict, k_)
+            end
+        end
+    end
     return j_list_clean, e_dict
 end
 
-
-function get_inc_matrix(junction_list, edge_list)
-    A = zeros(length(junction_list), length(edge_dict))
-    for (idx_j, j) in enumerate(junction_list)
-        for (idx_e, (k, v)) in enumerate(edge_dict)
-            if j == v[1]
-                A[idx_j, idx_e] = -1
-            end
-            if j == v[2]
-                A[idx_j, idx_e] = 1
-            end
-        end
-    end
-    return A
-end
-
-function get_adj_matrix(junction_list, edge_dict)
-    A = zeros(length(junction_list), length(junction_list))
-    for (idx_e, (k, v)) in enumerate(edge_dict)
-        #v[1], v[2]
-        idx_1 = findall(x->x==v[1], junction_list)[1]
-        idx_2 = findall(x->x==v[2], junction_list)[1]
-        A[idx_1, idx_2] = 1
-        A[idx_2, idx_1] = -1
-    end
-    return A
-end
-
-function write_matrix_to_file(file_name, A)
-    open(file_name, "w") do io
-        i_, j_ = size(A)
-        for i=1:i_
-            for j=1:j_
-                if j == j_
-                    write(io, string(string(Int(A[i, j])), "\n") )
-                else
-                    write(io, string(string(Int(A[i, j])), ",") )
-                end
-            end
-        end
-    end
+function get_clean_belgian_j_e()
+    out = Dict()
+    read_json!(out, path_belgian)
+    println(out)
+    j_list, e_dict = get_j_list_e_dict(dict)
+    j_list, e_dict = clean_belgian_leave_pipes_only(j_list, e_dict)
+    return j_list, e_dict
 end

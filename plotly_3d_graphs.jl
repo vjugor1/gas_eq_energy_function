@@ -1,6 +1,5 @@
 #Functions for 3d plotting of the solution
 using PlotlyJS
-using Plotly
 
 
 function topo_surface(data, title_name_)

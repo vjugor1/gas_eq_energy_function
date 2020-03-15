@@ -78,6 +78,13 @@ function find_edge(edges_dict, f_junction, t_junction)
     end
 end
 
+function print_dict(dict)
+    for (i, (k, v)) in enumerate(dict)
+        println("num=", i, ":", k, "=>", v)
+    end
+    nothing
+end
+
 function get_junc_num(junc_name, j_list)
     return findall(x->x==junc_name, j_list)[1]
 end

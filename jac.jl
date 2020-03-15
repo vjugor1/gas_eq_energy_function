@@ -164,22 +164,12 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
         if !isempty(out_going_edges_idxs)
             for out_e_idx in out_going_edges_idxs
                 for m=1:M
+                    #!!!!!!!!!!!
                     d[e_idx * I_, m] = d[(out_e_idx - 1) * I_ + 1,m]
                     p[e_idx * I_, m] = p[(out_e_idx - 1) * I_ + 1,m]
+                    #d[(out_e_idx - 1) * I_ + 1,m] = d[e_idx * I_, m]
+                    #p[(out_e_idx - 1) * I_ + 1,m] = p[e_idx * I_, m]
                 end
-            end
-        end
-    end
-    for e_idx=1:e_num
-        edge = A_inc[:,e_idx]
-        t = argmax(edge)
-        f = argmin(edge)
-        edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
-        edge_L = e_dict_p_Q[edge_name][3]
-        edge_eps_x = edge_L / I_
-        for m=1:M
-            for i=(2 + (e_idx-1) * I_):(e_idx * I_)
-                Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (edge_eps_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
             end
         end
     end
@@ -197,6 +187,8 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
             else
                 for m=1:M
                     Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                    #Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                    #Q[(in_going_edges_idxs[1] ) * I_, m] = sum(Q[1 + (idx - 1)* I_, m] for idx in out_going_edges_idxs)
                 end
             end
         end
@@ -207,13 +199,30 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
         f = argmin(edge)
         edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
         edge_L = e_dict_p_Q[edge_name][3]
-        edge_eps_x = edge_L / I_
+        edge_eps_x = edge_L / (I_ - 1)
+        for m=1:M
+            for i=(2 + (e_idx-1) * I_):(e_idx * I_)
+                #prtinln(i)
+                Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (edge_eps_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
+            end
+        end
+    end
+
+
+    for e_idx=1:e_num
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+        edge_L = e_dict_p_Q[edge_name][3]
+        edge_eps_x = edge_L / (I_ - 1)
         for m=2:M
             for i=(1 + (e_idx-1) * I_):(e_idx * I_ - 1)
                 p[i,m] = p[i,1] - (epsilon_t) / (edge_eps_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
             end
         end
     end
+
     if p_Q_out == false
         out[:] = p.^2
         nothing

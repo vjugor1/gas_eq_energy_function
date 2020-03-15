@@ -165,5 +165,14 @@ function get_init_value_grid(e_dict_p_Q_, I_, M)
         init_value_p_2[(1 + (i - 1) * I_):((i) * I_),:] = p_2_range * reshape(ones(M), 1, M)
         #end
     end
+    #init_value_Q[1 + (6 - 1) * I_,:] = init_value_Q[1 + (6 - 1) * I_,:] * 1.2
+    #init_value_Q[1 + (4 - 1) * I_, :] = init_value_Q[1 + (4 - 1) * I_, :] * 1.01
+    #init_value_p_2[1 + (15 - 1) * I_,:] = init_value_p_2[1 + (15 - 1) * I_,:] * 0.95
+    #init_value_p_2[1 + (9 - 1) * I_,:] = init_value_p_2[1 + (9 - 1) * I_,:] * 1.02
+    init_value_p_2[1 + (2 - 1) * I_,:] = init_value_p_2[1 + (2 - 1) * I_,:] * 0.9
+    #init_value_p_2[(10) * I_,:] = init_value_p_2[(10) * I_,:] * 0.9999999
+    #init_value_p_2[(7) * I_,:] = init_value_p_2[(7) * I_,:] * 0.95
+    #init_value_p_2[(8) * I_,:] = init_value_p_2[(8) * I_,:] * 0.95
+
     return init_value_p_2, init_value_Q
 end

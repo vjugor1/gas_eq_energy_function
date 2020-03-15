@@ -11,10 +11,10 @@ include("Plots_2d.jl")
 include("plotly_3d_graphs.jl")
 
 ######## GLOBAL PARAMETERS ########
-L = 1.0
+#L = 1.0
 T = 0.05
-I_ = 10#10
-M  = 100 #200
+I_ = 5#10
+M  = 77 #200
 epsilon_t = T / M
 #epsilon_x = L / I_
 

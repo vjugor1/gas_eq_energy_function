@@ -11,10 +11,10 @@ include("Plots_2d.jl")
 include("plotly_3d_graphs.jl")
 
 ######## GLOBAL PARAMETERS ########
-#L = 1.0
-T = 0.05
-I_ = 5#10
-M  = 77 #200
+L = 1.0
+T = 0.7
+I_ = 10#10
+M  = 1200 #200
 epsilon_t = T / M
 #epsilon_x = L / I_
 
@@ -27,7 +27,7 @@ M = 1002=#
 
 step = 1e-1
 #c_s = 300
-alpha_ = 8.57
+alpha_ = 8.57# * 10000
 
 ######## GLOBAL PARAMETERS ########
 d_min_p = []
@@ -39,11 +39,20 @@ criterions = []
 timing    = []
 #belgian
 j_list, e_dict = get_clean_belgian_j_e()
+
 e_dict_p_Q = set_stat_p_Q(j_list, e_dict, alpha_)
-A_inc = get_inc_matrix(j_list, e_dict)
+j_to_erase = []
+j_good = ["1", "4", "5", "81", "11", "14", "17", "16"]
+for item in j_list
+    if !(item in j_good)
+        push!(j_to_erase, item)
+    end
+end
+j_list = setdiff(j_list, j_to_erase)
+A_inc = get_inc_matrix(j_list, e_dict_p_Q)
 solve_scheme_belgian!(I_, M, j_list,
                                 e_dict_p_Q, A_inc, d_min_p, p_min_p, ps, ds,
-                                Qs, criterions, timing, f_d_belg!, -6)
+                                Qs, criterions, timing, f_d_belg!, -7)
 
 #3 pipes
 #solve_scheme_3_pipes!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, f_d_3_pipes!, -5.5)

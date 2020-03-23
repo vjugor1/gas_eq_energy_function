@@ -1,6 +1,7 @@
 #Functions for grid/plotly_3d_graphs
 using LightGraphs
 using SimpleWeightedGraphs
+using GraphPlot, Compose, Cairo
 include("read_json.jl")
 function get_inc_matrix(junction_list, edge_dict)
     A = zeros(length(junction_list), length(edge_dict))
@@ -24,7 +25,7 @@ function get_adj_matrix(junction_list, edge_dict)
         idx_1 = findall(x->x==v[1], junction_list)[1]
         idx_2 = findall(x->x==v[2], junction_list)[1]
         A[idx_1, idx_2] = 1
-        A[idx_2, idx_1] = -1
+        A[idx_2, idx_1] = 0#-1
     end
     return A
 end
@@ -118,7 +119,7 @@ function get_path_length(path_f_t)
     #println(path_f_t)
     for i=1:(length(path_f_t)-1)
         edge = find_edge(e_dict, j_list[path_f_t[i]], j_list[path_f_t[i+1]])
-        length_f_t = round(length_f_t + e_dict[edge][3], digits=3)
+        length_f_t = length_f_t + e_dict[edge][3]
     end
     return length_f_t
 end
@@ -151,25 +152,28 @@ function set_stat_p_Q(j_list, e_dict, alpha_)
     path_1_4 = get_path(g, j_list, e_dict, "1", "4")
     l_1_4 = get_path_length(path_1_4)
     push!(l_list, l_1_4)
-    Q_1_4 = compute_throughput(0.96^2, 0.925^2, alpha_, l_1_4)
+    #0.96^2, 0.9^2
+    Q_1_4 = compute_throughput(0.92^2, 0.91^2, alpha_, l_1_4)
     path_1_4_names = convert_path_idx_to_names(path_1_4, j_list)
-    set_p_Q_on_path!(e_dict_p_Q, Q_1_4, 0.96^2, path_1_4_names, alpha_)
+    set_p_Q_on_path!(e_dict_p_Q, Q_1_4, 0.92^2, path_1_4_names, alpha_)
     push!(Q_list, Q_1_4)
     #"5"-"4" line
     path_5_4 = get_path(g, j_list, e_dict, "5", "4")
     path_5_4_names = convert_path_idx_to_names(path_5_4, j_list)
     l_5_4 = get_path_length(path_5_4)
     push!(l_list, l_5_4)
-    Q_5_4 = compute_throughput(0.96^2, 0.925^2, alpha_, l_5_4)
-    set_p_Q_on_path!(e_dict_p_Q, Q_5_4, 0.96^2, path_5_4_names, alpha_)
+    #0.99^2, 0.9^2
+    Q_5_4 = compute_throughput(0.92^2, 0.91^2, alpha_, l_5_4)
+    set_p_Q_on_path!(e_dict_p_Q, Q_5_4, 0.92^2, path_5_4_names, alpha_)
     push!(Q_list, Q_5_4)
     #"81"-"11" line
+    #1.1^2, 0.945^2
     path_81_11 = get_path(g, j_list, e_dict, "81", "11")
     path_81_11_names = convert_path_idx_to_names(path_81_11, j_list)
     l_81_11 = get_path_length(path_81_11)
     push!(l_list, l_81_11)
-    Q_81_11 = compute_throughput(0.827^2, 0.805^2, alpha_, l_81_11)
-    set_p_Q_on_path!(e_dict_p_Q, Q_81_11, 0.827^2, path_81_11_names, alpha_)
+    Q_81_11 = compute_throughput(0.98^2, 0.925^2, alpha_, l_81_11)
+    set_p_Q_on_path!(e_dict_p_Q, Q_81_11, 0.98^2, path_81_11_names, alpha_)
     push!(Q_list, Q_81_11)
     #"4"-"14" line
     path_4_14 = get_path(g, j_list, e_dict, "4", "14")
@@ -177,7 +181,7 @@ function set_stat_p_Q(j_list, e_dict, alpha_)
     l_4_14 = get_path_length(path_4_14)
     push!(l_list, l_4_14)
     Q_4_14 = Q_1_4 + Q_5_4
-    set_p_Q_on_path!(e_dict_p_Q, Q_4_14, 0.925^2, path_4_14_names, alpha_)
+    set_p_Q_on_path!(e_dict_p_Q, Q_4_14, 0.91^2, path_4_14_names, alpha_)
     push!(Q_list, Q_4_14)
     edge_4_14 = find_edge(e_dict_p_Q, "4", "14")
     #"11"-"14" line
@@ -186,17 +190,20 @@ function set_stat_p_Q(j_list, e_dict, alpha_)
     l_11_14 = get_path_length(path_11_14)
     push!(l_list, l_11_14)
     p_14_2 = e_dict_p_Q[edge_4_14][5]
-    Q_11_14 = compute_throughput(0.805^2, p_14_2, alpha_, l_11_14)
-    set_p_Q_on_path!(e_dict_p_Q, Q_11_14, 0.805^2, path_11_14_names, alpha_)
+    Q_11_14 = compute_throughput(0.925^2, p_14_2, alpha_, l_11_14)
+    set_p_Q_on_path!(e_dict_p_Q, Q_11_14, 0.925^2, path_11_14_names, alpha_)
     push!(Q_list, Q_11_14)
     #"11"-"17" line
     path_11_17 = get_path(g, j_list, e_dict, "11", "17")
     path_11_17_names = convert_path_idx_to_names(path_11_17, j_list)
     l_11_17 = get_path_length(path_11_17)
     push!(l_list, l_11_17)
+    #p_17_2 = 0.91^2
+    #Q_11_17 = compute_throughput(0.925^2, p_17_2, alpha_, l_11_17)
     Q_11_17 = Q_81_11 - Q_11_14
+    #Q_11_14 = Q_81_11 - Q_11_17
     #println(Q_11_17)
-    set_p_Q_on_path!(e_dict_p_Q, Q_11_17, 0.805^2, path_11_17_names, alpha_)
+    set_p_Q_on_path!(e_dict_p_Q, Q_11_17, 0.925^2, path_11_17_names, alpha_)
     push!(Q_list, Q_11_17)
     #"14"-"16" line
     path_14_16 = get_path(g, j_list, e_dict, "14", "16")
@@ -206,6 +213,26 @@ function set_stat_p_Q(j_list, e_dict, alpha_)
     Q_14_16 = Q_4_14 + Q_11_14
     set_p_Q_on_path!(e_dict_p_Q, Q_14_16, p_14_2, path_14_16_names, alpha_)
     push!(Q_list, Q_14_16)
-    return e_dict_p_Q
 
+    e_dict_simple_p_Q = Dict()
+    e_dict_simple_p_Q["1"] = ["1", "4", l_list[1], 0.92^2, 0.91^2, Q_1_4]
+    e_dict_simple_p_Q["2"] = ["5", "4", l_list[2], 0.92^2, 0.91^2, Q_5_4]
+    e_dict_simple_p_Q["3"] = ["81", "11", l_list[3], 0.98^2, 0.925^2, Q_81_11]
+    e_dict_simple_p_Q["4"] = ["4", "14", l_list[4], 0.91^2, p_14_2, Q_4_14]
+    e_dict_simple_p_Q["5"] = ["11", "14", l_list[5], 0.925^2, p_14_2, Q_11_14]
+    p_17_2 = compute_right_pressure_2(0.925^2, Q_11_17, alpha_, l_list[6])
+
+    e_dict_simple_p_Q["6"] = ["11", "17", l_list[6], 0.925^2, p_17_2, Q_11_17]
+    p_16_2 = compute_right_pressure_2(p_14_2, Q_14_16, alpha_, l_list[7])
+
+    e_dict_simple_p_Q["7"] = ["14", "16", l_list[7], p_14_2, p_16_2, Q_14_16]
+    return e_dict_simple_p_Q#, l_list, Q_list
+
+end
+
+
+function plot_graph(j_list, e_dict)
+    A_adjacency = get_adj_matrix(j_list, e_dict)
+    g = SimpleDiGraph(A_adjacency)
+    draw(PNG("wat.png", 16cm, 16cm), gplot(g, nodelabel=j_list))
 end

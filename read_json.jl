@@ -1,5 +1,5 @@
 using JSON
-path_belgian = "belgian_lanl_ansi.json"
+path_belgian = "gas_eq_energy_function/belgian_lanl_ansi.json"
 function read_json!(out, file_name)
     dict = Dict()
     open(file_name, "r") do f

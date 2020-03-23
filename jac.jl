@@ -156,7 +156,7 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
     p = sqrt.(deepcopy(init_value_p_2))
     Q = deepcopy(init_value_Q)
     v_num, e_num = size(A_inc)
-    for e_idx=1:e_num
+    for e_idx=1:(e_num - 1)
         edge = A_inc[:,e_idx]
         t = argmax(edge)
         f = argmin(edge)
@@ -165,20 +165,53 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
             for out_e_idx in out_going_edges_idxs
                 for m=1:M
                     #!!!!!!!!!!!
-                    d[e_idx * I_, m] = d[(out_e_idx - 1) * I_ + 1,m]
-                    p[e_idx * I_, m] = p[(out_e_idx - 1) * I_ + 1,m]
-                    #d[(out_e_idx - 1) * I_ + 1,m] = d[e_idx * I_, m]
-                    #p[(out_e_idx - 1) * I_ + 1,m] = p[e_idx * I_, m]
+                    #if e_idx != 7
+                        d[e_idx * I_, m] = d[(out_e_idx - 1) * I_ + 1,m]
+                        p[e_idx * I_, m] = p[(out_e_idx - 1) * I_ + 1,m]
+                    #else
+                        #d[(out_e_idx - 1) * I_ + 1,m] = d[e_idx * I_, m]
+                        #p[(out_e_idx - 1) * I_ + 1,m] = p[e_idx * I_, m]
+                    #end
                 end
             end
         end
     end
+    e_idx_tmp = 7
+    edge_tmp = A_inc[:,e_idx_tmp]
+    t_tmp = argmax(edge_tmp)
+    f_tmp = argmin(edge_tmp)
+    out_e_idx_tmp = findall(x->x==-1.0, A_inc[t_tmp,:])
+    #println("!!!!!!!!!!!!!!!")
+    #println(out_going_edges_idxs)
+    #println("!!!!!!!!!!!!!!!")
+    #if !isempty(out_going_edges_idxs)
+        #for out_e_idx in out_going_edges_idxs
+            for m=1:M
+                #!!!!!!!!!!!
+                #if e_idx != 7
+                    d[e_idx_tmp * I_, m] = d[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
+                    p[e_idx_tmp * I_, m] = p[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
+                    d[(out_e_idx_tmp[2] - 1) * I_ + 1,m] = d[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
+                    p[(out_e_idx_tmp[2] - 1) * I_ + 1,m] = p[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
+                #else
+                    #d[(out_e_idx - 1) * I_ + 1,m] = d[e_idx * I_, m]
+                    #p[(out_e_idx - 1) * I_ + 1,m] = p[e_idx * I_, m]
+                #end
+            end
+        #end
+    #end
     for e_idx=1:e_num
         edge = A_inc[:,e_idx]
         t = argmax(edge)
         f = argmin(edge)
         out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
         in_going_edges_idxs  = findall(x->x==1.0, A_inc[t,:])
+        #########
+        #!!!!!!!
+        #if 7 in in_going_edges_idxs
+        #    in_going_edges_idxs = setdiff(in_going_edges_idxs, 7)
+        #end
+        ########
         if !isempty(out_going_edges_idxs)
             if length(out_going_edges_idxs) == 1
                 for m=1:M
@@ -186,7 +219,9 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
                 end
             else
                 for m=1:M
+
                     Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+
                     #Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
                     #Q[(in_going_edges_idxs[1] ) * I_, m] = sum(Q[1 + (idx - 1)* I_, m] for idx in out_going_edges_idxs)
                 end
@@ -208,8 +243,9 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
         end
     end
 
-
-    for e_idx=1:e_num
+    range__ = collect(1:e_num)
+    range__ = setdiff(range__, 5)
+    for e_idx in range__
         edge = A_inc[:,e_idx]
         t = argmax(edge)
         f = argmin(edge)
@@ -218,11 +254,13 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
         edge_eps_x = edge_L / (I_ - 1)
         for m=2:M
             for i=(1 + (e_idx-1) * I_):(e_idx * I_ - 1)
-                p[i,m] = p[i,1] - (epsilon_t) / (edge_eps_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
+                #if (i != 1 + (9 - 1) * I_) & (i != 1 + (14 - 1) * I_) & (i != 1 + (15 - 1) * I_)
+                    p[i,m] = p[i,1] - (epsilon_t) / (edge_eps_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
+                #end
             end
+
         end
     end
-
     if p_Q_out == false
         out[:] = p.^2
         nothing
@@ -424,10 +462,12 @@ function solve_scheme_3_pipes!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, 
     if init_values == -112
         tmp_out = get_init_p_Q(I_, M, right_bound_const, left_bound_const,
                             initial_value_lin, left_bound_Q_const, right_bound_Q_const, 42)
+        tmp_out_2 = get_init_p_Q(I_, M, right_bound_const, left_bound_const,
+                            initial_value_lin, right_bound_Q_const, right_bound_Q_const, 42)
         tmp_out_third_pipe = get_init_p_Q(I_, M, right_bound_const_3rd, left_bound_const_3rd,
                             initial_value_lin, left_bound_Q_const_3rd, right_bound_Q_const_3rd, 42)
-        global init_value_p_2 = [tmp_out[1]; tmp_out[1]; tmp_out_third_pipe[1]]
-        global init_value_Q   = [tmp_out[2]; tmp_out[2]; tmp_out_third_pipe[2]]
+        global init_value_p_2 = [tmp_out_2[1]; tmp_out_2[1]; tmp_out_third_pipe[1]]
+        global init_value_Q   = [tmp_out_2[2]; tmp_out_2[2]; tmp_out_third_pipe[2]]
     else
         global init_value_p_2 = init_values[1]
         global init_value_Q   = init_values[2]

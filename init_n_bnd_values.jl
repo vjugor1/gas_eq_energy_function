@@ -200,7 +200,11 @@ function get_init_value_grid(e_dict_p_Q_, I_, M)
     #init_value_p_2[1 + (15 - 1) * I_,:] = init_value_p_2[1 + (15 - 1) * I_,:] * 0.95
     #init_value_p_2[1 + (9 - 1) * I_,:] = init_value_p_2[1 + (9 - 1) * I_,:] * 1.02
     #init_value_p_2[1+(2-1)*I_, :] = init_value_p_2[1+(2-1)*I_, :] * 0.95
-    init_value_Q[1 + (2 - 1) * I_,:] = init_value_Q[1 + (2 - 1) * I_,:] * 1.1 
+    init_value_Q[1 + (2 - 1) * I_,:] = init_value_Q[1 + (2 - 1) * I_,:] * 1.1
+    #init_value_p_2[(5) * I_,:] = init_value_p_2[(5) * I_,:] * 1.00792163
+    #init_value_Q[1 + (5 - 1) * I_,:] = global_boy
+    #init_value_Q[ (5) * I_,:] = init_value_Q[(5) * I_,:] * 0.95
+    #init_value_Q[1 + (2 - 1) * I_,:] = init_value_Q[1 + (2 - 1) * I_,:] * 1.001
     #init_value_Q[1 + (2 - 1) * I_,:] = init_value_Q[1 + (2 - 1) * I_,:] * 1.05
     #init_value_p_2[(10) * I_,:] = init_value_p_2[(10) * I_,:] * 0.9999999
     #init_value_p_2[(7) * I_,:] = init_value_p_2[(7) * I_,:] * 0.95

@@ -156,13 +156,14 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
     p = sqrt.(deepcopy(init_value_p_2))
     Q = deepcopy(init_value_Q)
     v_num, e_num = size(A_inc)
-    for e_idx=1:(e_num - 1)
+    e_idx_1 = collect(1:e_num)
+    for e_idx in setdiff(e_idx_1, 7)
         edge = A_inc[:,e_idx]
         t = argmax(edge)
         f = argmin(edge)
         out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
         if !isempty(out_going_edges_idxs)
-            for out_e_idx in out_going_edges_idxs
+            for out_e_idx in out_going_edges_idxs#[end:-1:1]
                 for m=1:M
                     #!!!!!!!!!!!
                     #if e_idx != 7
@@ -177,29 +178,30 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
         end
     end
     e_idx_tmp = 7
-    edge_tmp = A_inc[:,e_idx_tmp]
-    t_tmp = argmax(edge_tmp)
-    f_tmp = argmin(edge_tmp)
-    out_e_idx_tmp = findall(x->x==-1.0, A_inc[t_tmp,:])
-    #println("!!!!!!!!!!!!!!!")
-    #println(out_going_edges_idxs)
-    #println("!!!!!!!!!!!!!!!")
-    #if !isempty(out_going_edges_idxs)
-        #for out_e_idx in out_going_edges_idxs
-            for m=1:M
-                #!!!!!!!!!!!
-                #if e_idx != 7
-                    d[e_idx_tmp * I_, m] = d[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
-                    p[e_idx_tmp * I_, m] = p[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
-                    d[(out_e_idx_tmp[2] - 1) * I_ + 1,m] = d[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
-                    p[(out_e_idx_tmp[2] - 1) * I_ + 1,m] = p[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
-                #else
-                    #d[(out_e_idx - 1) * I_ + 1,m] = d[e_idx * I_, m]
-                    #p[(out_e_idx - 1) * I_ + 1,m] = p[e_idx * I_, m]
-                #end
-            end
+        edge_tmp = A_inc[:,e_idx_tmp]
+        t_tmp = argmax(edge_tmp)
+        f_tmp = argmin(edge_tmp)
+        out_e_idx_tmp = findall(x->x==-1.0, A_inc[t_tmp,:])
+        #println("!!!!!!!!!!!!!!!")
+        #println(out_going_edges_idxs)
+        #println("!!!!!!!!!!!!!!!")
+        #if !isempty(out_going_edges_idxs)
+            #for out_e_idx in out_going_edges_idxs
+                for m=1:M
+                    #!!!!!!!!!!!
+                    #if e_idx != 7
+                        d[e_idx_tmp * I_, m] = d[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
+                        p[e_idx_tmp * I_, m] = p[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
+                        d[(out_e_idx_tmp[2] - 1) * I_ + 1,m] = d[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
+                        p[(out_e_idx_tmp[2] - 1) * I_ + 1,m] = p[(out_e_idx_tmp[1] - 1) * I_ + 1,m]
+                    #else
+                        #d[(out_e_idx - 1) * I_ + 1,m] = d[e_idx * I_, m]
+                        #p[(out_e_idx - 1) * I_ + 1,m] = p[e_idx * I_, m]
+                    #end
+                end
+            #end
         #end
-    #end
+
     for e_idx=1:e_num
         edge = A_inc[:,e_idx]
         t = argmax(edge)
@@ -213,22 +215,24 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
         #end
         ########
         if !isempty(out_going_edges_idxs)
-            if length(out_going_edges_idxs) == 1
-                for m=1:M
-                    Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs)
-                end
-            else
-                for m=1:M
+           if length(out_going_edges_idxs) == 1
+               for m=1:M
+                   Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs)
+               end
+           else
+               for m=1:M
+                  # println(out_going_edges_idxs)
+                   Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                   #Q[1 + (out_going_edges_idxs[2] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[2]))
 
-                    Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
-
-                    #Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
-                    #Q[(in_going_edges_idxs[1] ) * I_, m] = sum(Q[1 + (idx - 1)* I_, m] for idx in out_going_edges_idxs)
-                end
-            end
-        end
+                   #Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                   #Q[(in_going_edges_idxs[1] ) * I_, m] = sum(Q[1 + (idx - 1)* I_, m] for idx in out_going_edges_idxs)
+               end
+           end
+       end
     end
-    for e_idx=1:e_num
+
+    for e_idx in e_idx_1
         edge = A_inc[:,e_idx]
         t = argmax(edge)
         f = argmin(edge)
@@ -243,8 +247,10 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
         end
     end
 
+
+
     range__ = collect(1:e_num)
-    range__ = setdiff(range__, 5)
+    #range__ = setdiff(range__, 5)
     for e_idx in range__
         edge = A_inc[:,e_idx]
         t = argmax(edge)
@@ -261,6 +267,22 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
 
         end
     end
+
+    #=e_idx = 5
+    edge = A_inc[:,e_idx]
+    t = argmax(edge)
+    f = argmin(edge)
+    edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+    edge_L = e_dict_p_Q[edge_name][3]
+    edge_eps_x = edge_L / (I_ - 1)
+    for m=2:M
+        for i=(1 + (e_idx-1) * I_):(e_idx * I_  - 1)
+            #if (i != 1 + (9 - 1) * I_) & (i != 1 + (14 - 1) * I_) & (i != 1 + (15 - 1) * I_)
+                p[i,m] = p[i,1] - (epsilon_t) / (edge_eps_x) * sum( Q[i + 1,m_] - Q[i,m_] for m_=1:(m-1))
+            #end
+        end
+    end=#
+
     if p_Q_out == false
         out[:] = p.^2
         nothing

@@ -51,5 +51,7 @@ function get_clean_belgian_j_e()
     println(out)
     j_list, e_dict = get_j_list_e_dict(dict)
     j_list, e_dict = clean_belgian_leave_pipes_only(j_list, e_dict)
+    e_tmp = find_edge(e_dict, "11", "17")
+    e_dict[e_tmp][3] = 1.35
     return j_list, e_dict
 end

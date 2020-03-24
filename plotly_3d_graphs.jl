@@ -14,6 +14,7 @@ function topo_surface(data, title_name_, epsilon_x=1e-1)
 end
 
 
-
-
+function foo_3d(n)
+     topo_surface(Q_prev[(1 + (n - 1) * I_) : (n * I_), :], "Q(x,t)")
+end
 #{z: z1, type: 'surface'}

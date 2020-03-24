@@ -172,8 +172,8 @@ function set_stat_p_Q(j_list, e_dict, alpha_)
     path_81_11_names = convert_path_idx_to_names(path_81_11, j_list)
     l_81_11 = get_path_length(path_81_11)
     push!(l_list, l_81_11)
-    Q_81_11 = compute_throughput(0.98^2, 0.925^2, alpha_, l_81_11)
-    set_p_Q_on_path!(e_dict_p_Q, Q_81_11, 0.98^2, path_81_11_names, alpha_)
+    Q_81_11 = compute_throughput(1.1^2, 0.925^2, alpha_, l_81_11)
+    set_p_Q_on_path!(e_dict_p_Q, Q_81_11, 1.1^2, path_81_11_names, alpha_)
     push!(Q_list, Q_81_11)
     #"4"-"14" line
     path_4_14 = get_path(g, j_list, e_dict, "4", "14")
@@ -201,10 +201,11 @@ function set_stat_p_Q(j_list, e_dict, alpha_)
     #p_17_2 = 0.91^2
     #Q_11_17 = compute_throughput(0.925^2, p_17_2, alpha_, l_11_17)
     Q_11_17 = Q_81_11 - Q_11_14
-    #Q_11_14 = Q_81_11 - Q_11_17
+    Q_11_14 = Q_81_11 - Q_11_17
     #println(Q_11_17)
     set_p_Q_on_path!(e_dict_p_Q, Q_11_17, 0.925^2, path_11_17_names, alpha_)
     push!(Q_list, Q_11_17)
+
     #"14"-"16" line
     path_14_16 = get_path(g, j_list, e_dict, "14", "16")
     path_14_16_names = convert_path_idx_to_names(path_14_16, j_list)
@@ -217,7 +218,7 @@ function set_stat_p_Q(j_list, e_dict, alpha_)
     e_dict_simple_p_Q = Dict()
     e_dict_simple_p_Q["1"] = ["1", "4", l_list[1], 0.92^2, 0.91^2, Q_1_4]
     e_dict_simple_p_Q["2"] = ["5", "4", l_list[2], 0.92^2, 0.91^2, Q_5_4]
-    e_dict_simple_p_Q["3"] = ["81", "11", l_list[3], 0.98^2, 0.925^2, Q_81_11]
+    e_dict_simple_p_Q["3"] = ["81", "11", l_list[3], 1.1^2, 0.925^2, Q_81_11]
     e_dict_simple_p_Q["4"] = ["4", "14", l_list[4], 0.91^2, p_14_2, Q_4_14]
     e_dict_simple_p_Q["5"] = ["11", "14", l_list[5], 0.925^2, p_14_2, Q_11_14]
     p_17_2 = compute_right_pressure_2(0.925^2, Q_11_17, alpha_, l_list[6])
@@ -226,6 +227,8 @@ function set_stat_p_Q(j_list, e_dict, alpha_)
     p_16_2 = compute_right_pressure_2(p_14_2, Q_14_16, alpha_, l_list[7])
 
     e_dict_simple_p_Q["7"] = ["14", "16", l_list[7], p_14_2, p_16_2, Q_14_16]
+    #!!!!!!!
+    #delete!(e_dict_simple_p_Q, "6")
     return e_dict_simple_p_Q#, l_list, Q_list
 
 end

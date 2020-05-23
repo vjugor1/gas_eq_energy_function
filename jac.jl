@@ -100,6 +100,7 @@ function solve_opt(I_, M, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_
     end
 end
 
+
 function f_d_bwd_eul!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     #out of place
     p = sqrt.(copy(init_value_p_2))
@@ -151,6 +152,38 @@ function f_d!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_ou
         nothing
     end
 end
+
+
+function f_d_exact!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
+    #out of place
+    p = sqrt.(copy(init_value_p_2))
+    Q = copy(init_value_Q)
+
+
+    for m=1:(M-1)
+        for i=2:I_
+            Q[i,m] = sqrt(abs(-p[i,m]^2 + p[i-1,m]^2) / (epsilon_x * alpha_) ) *
+                        sign((+p[i,m]^2 - p[i-1,m]^2))
+            if i < I_
+                p[i,m+1] = p[i,m] - epsilon_t * (Q[i+1,m] - Q[i,m]) / epsilon_x
+            end
+        end
+    end
+    for i=2:I_
+        Q[i,M] = sqrt(abs(-p[i,M]^2 + p[i-1,M]^2) / (epsilon_x * alpha_) ) *
+                    sign((-p[i,M]^2 + p[i-1,M]^2))
+    end
+
+
+
+    if p_Q_out == false
+        out[:] = p.^2
+        nothing
+    else
+        return p, Q
+    end
+end
+
 
 function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_inc, epsilon_t, p_Q_out)
     p = sqrt.(deepcopy(init_value_p_2))
@@ -292,6 +325,347 @@ function f_d_belg!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_i
         nothing
     end
 end
+
+function solve_opt_newty(I_, M, j_list, e_dict_p_Q_, A_inc, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, f_d_simul!, criteri, p_Q_out)
+    #Out-of-place type
+    tmp_init = get_init_value_grid(e_dict_p_Q_, I_, M)
+    global init_value_p_2 = tmp_init[1]
+    global init_value_Q   = tmp_init[2]
+    global e_num = length(e_dict_p_Q_)
+    model = Model(with_optimizer(Ipopt.Optimizer))
+    @variable(model, Q[i=1:I_*e_num, m=1:M], start=init_value_Q[i, m] )
+    @variable(model, p[i=1:I_*e_num, m=1:M], start=sqrt(init_value_p_2[i,m]))
+    e_idx_1 = collect(1:e_num)
+    for e_idx in e_idx_1
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
+        if !isempty(out_going_edges_idxs)
+
+            for out_e_idx in out_going_edges_idxs#[end:-1:1]
+                for m=1:M
+                    #!!!!!!!!!!!
+                    #if e_idx != 7
+                        @constraint(model,  p[e_idx * I_, m] == p[(out_e_idx - 1) * I_ + 1,m])
+                    #else
+                        #d[(out_e_idx - 1) * I_ + 1,m] = d[e_idx * I_, m]
+                        #p[(out_e_idx - 1) * I_ + 1,m] = p[e_idx * I_, m]
+                    #end
+                end
+            end
+        end
+    end
+
+    for e_idx=1:e_num
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
+        in_going_edges_idxs  = findall(x->x==1.0, A_inc[t,:])
+        #########
+        #!!!!!!!
+        #if 7 in in_going_edges_idxs
+        #    in_going_edges_idxs = setdiff(in_going_edges_idxs, 7)
+        #end
+        ########
+        if !isempty(out_going_edges_idxs)
+           if length(out_going_edges_idxs) == 1
+               for m=1:M
+                   #Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs)
+                   @constraint(model,  Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] == sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs))
+               end
+           else
+               for m=1:M
+                  # println(out_going_edges_idxs)
+                   #Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                   @constraint(model,  Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] == sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1])))
+                   #Q[1 + (out_going_edges_idxs[2] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[2]))
+
+                   #Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                   #Q[(in_going_edges_idxs[1] ) * I_, m] = sum(Q[1 + (idx - 1)* I_, m] for idx in out_going_edges_idxs)
+               end
+           end
+       end
+    end
+
+
+
+
+    @NLobjective(model, Min, sum(((p[i,m+1] - p[i,m]) / epsilon_t + (Q[i+1,m] - Q[i,m]) / epsilon_x)^2 for i=1:(I_-1), m=1:(M-1)) + sum((( epsilon_x * alpha_ * Q[i,m] * sqrt(Q[i,m]^2) + p[i,m]^2 - p[i-1,m]^2 )^2 for i=2:I_, m=1:M) ))
+
+    optimize!(model)
+    #println("optimize...done")
+    p_out = value.(p)
+    Q_out = value.(Q)
+    return MOI.get(model, MOI.SolveTime())
+    #=if p_Q_out == true
+        return (p_out, Q_out)
+    else
+        return p_out.^2
+    end=#
+end
+
+function solve_opt_newty_one_pipe(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, timing, f_d!)
+    #Out-of-place type
+    tmp_out = get_init_p_Q(I_, M, right_bound_const, left_bound_const,
+                        initial_value_lin, left_bound_Q_const, right_bound_Q_const, 42)
+    init_value_p_2 = tmp_out[1]
+    init_value_Q   = tmp_out[2]
+
+    model = Model(with_optimizer(Ipopt.Optimizer))
+    @variable(model, Q[i=1:I_, m=1:M], start=init_value_Q[i, m] )
+    @variable(model, p[i=1:I_, m=1:M], start=sqrt(init_value_p_2[i,m]))
+
+
+    @NLobjective(model, Min, sum(((p[i,m+1] - p[i,m]) / epsilon_t + (Q[i+1,m] - Q[i,m]) / epsilon_x)^2 for i=1:(I_-1), m=1:(M-1)) + sum((( epsilon_x * alpha_ * Q[i,m] * sqrt(Q[i,m]^2) + p[i,m]^2 - p[i-1,m]^2 )^2 for i=2:I_, m=1:M) ))
+
+    optimize!(model)
+    #println("TIme = ", MOI.get(model, MOI.SolveTime()))
+    #println("optimize...done")
+    p_out = value.(p)
+    Q_out = value.(Q)
+
+    return MOI.get(model, MOI.SolveTime())
+
+end
+
+function f_d_simul!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_inc, epsilon_t, p_Q_out)
+    p = sqrt.(deepcopy(init_value_p_2))
+    Q = deepcopy(init_value_Q)
+    v_num, e_num = size(A_inc)
+    e_idx_1 = collect(1:e_num)
+    for e_idx in e_idx_1
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
+        if !isempty(out_going_edges_idxs)
+            for out_e_idx in out_going_edges_idxs#[end:-1:1]
+                for m=1:M
+                    #!!!!!!!!!!!
+                    #if e_idx != 7
+                        d[e_idx * I_, m] = d[(out_e_idx - 1) * I_ + 1,m]
+                        p[e_idx * I_, m] = p[(out_e_idx - 1) * I_ + 1,m]
+                    #else
+                        #d[(out_e_idx - 1) * I_ + 1,m] = d[e_idx * I_, m]
+                        #p[(out_e_idx - 1) * I_ + 1,m] = p[e_idx * I_, m]
+                    #end
+                end
+            end
+        end
+    end
+
+
+    for e_idx=1:e_num
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
+        in_going_edges_idxs  = findall(x->x==1.0, A_inc[t,:])
+        #########
+        #!!!!!!!
+        #if 7 in in_going_edges_idxs
+        #    in_going_edges_idxs = setdiff(in_going_edges_idxs, 7)
+        #end
+        ########
+        if !isempty(out_going_edges_idxs)
+           if length(out_going_edges_idxs) == 1
+               for m=1:M
+                   Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs)
+               end
+           else
+               for m=1:M
+                  # println(out_going_edges_idxs)
+                   Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                   #Q[1 + (out_going_edges_idxs[2] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[2]))
+
+                   #Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                   #Q[(in_going_edges_idxs[1] ) * I_, m] = sum(Q[1 + (idx - 1)* I_, m] for idx in out_going_edges_idxs)
+               end
+           end
+       end
+    end
+
+    for e_idx in e_idx_1
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+        edge_L = e_dict_p_Q[edge_name][3]
+        edge_eps_x = edge_L / (I_ - 1)
+        for m=1:M
+            for i=(2 + (e_idx-1) * I_):(e_idx * I_)
+                #prtinln(i)
+                Q[i,m] = - sqrt( abs(d[i,m] - d[i-1,m]) / (edge_eps_x * alpha_) ) * sign(d[i,m] - d[i-1,m])
+            end
+        end
+    end
+
+
+
+    range__ = collect(1:e_num)
+    #range__ = setdiff(range__, 5)
+    for e_idx in range__
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+        edge_L = e_dict_p_Q[edge_name][3]
+        edge_eps_x = edge_L / (I_ - 1)
+        for m=2:M
+            for i=(1 + (e_idx-1) * I_):(e_idx * I_ - 1)
+                #if (i != 1 + (9 - 1) * I_) & (i != 1 + (14 - 1) * I_) & (i != 1 + (15 - 1) * I_)
+                    p[i,m] = p[i,1] - (epsilon_t) / (edge_eps_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
+                #end
+            end
+
+        end
+    end
+
+    #=e_idx = 5
+    edge = A_inc[:,e_idx]
+    t = argmax(edge)
+    f = argmin(edge)
+    edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+    edge_L = e_dict_p_Q[edge_name][3]
+    edge_eps_x = edge_L / (I_ - 1)
+    for m=2:M
+        for i=(1 + (e_idx-1) * I_):(e_idx * I_  - 1)
+            #if (i != 1 + (9 - 1) * I_) & (i != 1 + (14 - 1) * I_) & (i != 1 + (15 - 1) * I_)
+                p[i,m] = p[i,1] - (epsilon_t) / (edge_eps_x) * sum( Q[i + 1,m_] - Q[i,m_] for m_=1:(m-1))
+            #end
+        end
+    end=#
+
+    if p_Q_out == false
+        out[:] = p.^2
+        nothing
+    else
+        out[1] = p
+        out[2] = Q
+        nothing
+    end
+end
+
+
+
+function f_d_simul_exact!(d, out, init_value_p_2, init_value_Q, j_list, e_dict_p_Q, A_inc, epsilon_t, p_Q_out)
+    p = sqrt.(deepcopy(init_value_p_2))
+    Q = deepcopy(init_value_Q)
+    v_num, e_num = size(A_inc)
+    e_idx_1 = collect(1:e_num)
+    for e_idx in e_idx_1
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
+        if !isempty(out_going_edges_idxs)
+            for out_e_idx in out_going_edges_idxs#[end:-1:1]
+                for m=1:M
+                    #!!!!!!!!!!!
+                    #if e_idx != 7
+                        d[e_idx * I_, m] = d[(out_e_idx - 1) * I_ + 1,m]
+                        p[e_idx * I_, m] = p[(out_e_idx - 1) * I_ + 1,m]
+                    #else
+                        #d[(out_e_idx - 1) * I_ + 1,m] = d[e_idx * I_, m]
+                        #p[(out_e_idx - 1) * I_ + 1,m] = p[e_idx * I_, m]
+                    #end
+                end
+            end
+        end
+    end
+
+
+    for e_idx=1:e_num
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        out_going_edges_idxs = findall(x->x==-1.0, A_inc[t,:])
+        in_going_edges_idxs  = findall(x->x==1.0, A_inc[t,:])
+        #########
+        #!!!!!!!
+        #if 7 in in_going_edges_idxs
+        #    in_going_edges_idxs = setdiff(in_going_edges_idxs, 7)
+        #end
+        ########
+        if !isempty(out_going_edges_idxs)
+           if length(out_going_edges_idxs) == 1
+               for m=1:M
+                   Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs)
+               end
+           else
+               for m=1:M
+                  # println(out_going_edges_idxs)
+                   Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                   #Q[1 + (out_going_edges_idxs[2] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[2]))
+
+                   #Q[1 + (out_going_edges_idxs[1] - 1) * I_, m] = sum(Q[(idx)* I_, m] for idx in in_going_edges_idxs) - sum(Q[1 + (idx - 1)* I_, m] for idx in setdiff(out_going_edges_idxs, out_going_edges_idxs[1]))
+                   #Q[(in_going_edges_idxs[1] ) * I_, m] = sum(Q[1 + (idx - 1)* I_, m] for idx in out_going_edges_idxs)
+               end
+           end
+       end
+    end
+
+    for e_idx in e_idx_1
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+        edge_L = e_dict_p_Q[edge_name][3]
+        edge_eps_x = edge_L / (I_ - 1)
+        for m=1:M
+            for i=(2 + (e_idx-1) * I_):(e_idx * I_)
+                #prtinln(i)
+                Q[i,m] = - sqrt( abs(p[i,m]^2 - p[i-1,m]^2) / (edge_eps_x * alpha_) ) * sign(p[i,m]^2 - p[i-1,m]^2)
+            end
+        end
+    end
+
+
+
+    range__ = collect(1:e_num)
+    #range__ = setdiff(range__, 5)
+    for e_idx in range__
+        edge = A_inc[:,e_idx]
+        t = argmax(edge)
+        f = argmin(edge)
+        edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+        edge_L = e_dict_p_Q[edge_name][3]
+        edge_eps_x = edge_L / (I_ - 1)
+        for m=2:M
+            for i=(1 + (e_idx-1) * I_):(e_idx * I_ - 1)
+                #if (i != 1 + (9 - 1) * I_) & (i != 1 + (14 - 1) * I_) & (i != 1 + (15 - 1) * I_)
+                    p[i,m] = p[i,1] - (epsilon_t) / (edge_eps_x) * sum( Q[i+1,m_] - Q[i,m_] for m_=1:(m-1))
+                #end
+            end
+
+        end
+    end
+
+    #=e_idx = 5
+    edge = A_inc[:,e_idx]
+    t = argmax(edge)
+    f = argmin(edge)
+    edge_name = find_edge(e_dict_p_Q, j_list[f], j_list[t])
+    edge_L = e_dict_p_Q[edge_name][3]
+    edge_eps_x = edge_L / (I_ - 1)
+    for m=2:M
+        for i=(1 + (e_idx-1) * I_):(e_idx * I_  - 1)
+            #if (i != 1 + (9 - 1) * I_) & (i != 1 + (14 - 1) * I_) & (i != 1 + (15 - 1) * I_)
+                p[i,m] = p[i,1] - (epsilon_t) / (edge_eps_x) * sum( Q[i + 1,m_] - Q[i,m_] for m_=1:(m-1))
+            #end
+        end
+    end=#
+
+    if p_Q_out == false
+        out[:] = p.^2
+        nothing
+    else
+        return p, Q
+    end
+end
+
 
 function f_d_3_pipes!(d, out, init_value_p_2, init_value_Q, epsilon_t, epsilon_x, p_Q_out)
     #out of place
@@ -564,6 +938,10 @@ function solve_scheme_3_pipes!(I_, M, d_min_p, p_min_p, ps, ds, Qs, criterions, 
     end
     nothing
 end
+
+
+
+
 
 function solve_scheme_belgian!(I_, M, j_list,
                                 e_dict_p_Q_, A_inc,  d_min_p, p_min_p, ps, ds,
